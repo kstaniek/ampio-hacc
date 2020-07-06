@@ -1,37 +1,23 @@
 """Ampio Sensors."""
 import logging
-from typing import Optional
 
 import voluptuous as vol
 
-from homeassistant.core import callback
-from homeassistant.components import mqtt, binary_sensor
 import homeassistant.helpers.config_validation as cv
-from homeassistant.components.binary_sensor import (
-    DEVICE_CLASSES_SCHEMA,
-    BinarySensorEntity,
-)
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.components import binary_sensor, mqtt
+from homeassistant.components.binary_sensor import (DEVICE_CLASSES_SCHEMA,
+                                                    BinarySensorEntity)
+from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
+                                 CONF_FORCE_UPDATE, CONF_ICON, CONF_NAME)
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_DEVICE_CLASS,
-    CONF_FORCE_UPDATE,
-    CONF_ICON,
-    CONF_NAME,
-)
+from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-
+from . import (CONF_UNIQUE_ID, AmpioEntityDeviceInfo, BaseAmpioEntity,
+               subscription)
 from .const import AMPIO_DISCOVERY_NEW, CONF_STATE_TOPIC, DEFAULT_QOS
-from . import (
-    CONF_UNIQUE_ID,
-    AmpioEntityDeviceInfo,
-    subscription,
-    BaseAmpioEntity,
-)
-from .models import AmpioModuleInfo
 from .debug_info import log_messages
-
+from .models import AmpioModuleInfo
 
 _LOGGER = logging.getLogger(__name__)
 

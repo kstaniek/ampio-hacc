@@ -1,27 +1,19 @@
 """Ampio Cover."""
 import logging
 
-from homeassistant.core import callback
 from homeassistant.components import cover
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.const import CONF_DEVICE
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-
-from .models import AmpioModuleInfo
-from .const import (
-    AMPIO_DISCOVERY_NEW,
-    DOMAIN,
-    CONF_STATE_TOPIC,
-    CONF_COMMAND_TOPIC,
-    CONF_TILT_POSITION_TOPIC,
-    CONF_OPENING_STATE_TOPIC,
-    CONF_CLOSING_STATE_TOPIC,
-    CONF_RAW_TOPIC,
-    DEFAULT_QOS,
-)
-from . import AmpioEntityDeviceInfo, subscription, BaseAmpioEntity
+from . import AmpioEntityDeviceInfo, BaseAmpioEntity, subscription
+from .const import (AMPIO_DISCOVERY_NEW, CONF_CLOSING_STATE_TOPIC,
+                    CONF_COMMAND_TOPIC, CONF_OPENING_STATE_TOPIC,
+                    CONF_RAW_TOPIC, CONF_STATE_TOPIC, CONF_TILT_POSITION_TOPIC,
+                    DEFAULT_QOS, DOMAIN)
 from .debug_info import log_messages
+from .models import AmpioModuleInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,11 +51,8 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
             parts = state_topic.split("/")
             self._index = int(parts[-1])
 
-
-
         device_config = config.get(CONF_DEVICE)
         AmpioEntityDeviceInfo.__init__(self, device_config, config_entry)
-
 
     async def subscribe_topics(self):
         """(Re)Subscribe to topics."""
@@ -146,7 +135,6 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
             self.hass, self._sub_state, topics
         )
 
-
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""
         self._sub_state = await subscription.async_unsubscribe_topics(
@@ -193,43 +181,44 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
     async def async_open_cover(self, **kwargs):
         """Open the cover."""
         await self.hass.data[DOMAIN].async_publish(
-                self._config[CONF_COMMAND_TOPIC], 2, 0, False
-            )
+            self._config[CONF_COMMAND_TOPIC], 2, 0, False
+        )
 
     async def async_close_cover(self, **kwargs):
         """Close cover."""
         await self.hass.data[DOMAIN].async_publish(
-                self._config[CONF_COMMAND_TOPIC], 1, 0, False
-            )
+            self._config[CONF_COMMAND_TOPIC], 1, 0, False
+        )
 
     async def async_stop_cover(self, **kwargs):
         """Close cover."""
         await self.hass.data[DOMAIN].async_publish(
-                self._config[CONF_COMMAND_TOPIC], 0, 0, False
-            )
+            self._config[CONF_COMMAND_TOPIC], 0, 0, False
+        )
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
         position = kwargs.get("position")
         if position is not None:
             cmd = b"\x00\x01"
-            position = 0xff & position
-            position_bytes = position.to_bytes(1, byteorder='little')
-            mask = 0xff & (0x01 << (self._index - 1))
-            mask_bytes = mask.to_bytes(1, byteorder='little')
-            raw = cmd + mask_bytes + position_bytes + b"\x66"  # tilt to previous position
+            position = 0xFF & position
+            position_bytes = position.to_bytes(1, byteorder="little")
+            mask = 0xFF & (0x01 << (self._index - 1))
+            mask_bytes = mask.to_bytes(1, byteorder="little")
+            raw = (
+                cmd + mask_bytes + position_bytes + b"\x66"
+            )  # tilt to previous position
             await self.hass.data[DOMAIN].async_publish(
                 self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
             )
-
 
     async def async_open_cover_tilt(self, **kwargs):
         """Open the cover tilt."""
         cmd = b"\x00\x02"
         position = 0x64
-        position_bytes = position.to_bytes(1, byteorder='little')
-        mask = 0xff & (0x01 << (self._index - 1))
-        mask_bytes = mask.to_bytes(1, byteorder='little')
+        position_bytes = position.to_bytes(1, byteorder="little")
+        mask = 0xFF & (0x01 << (self._index - 1))
+        mask_bytes = mask.to_bytes(1, byteorder="little")
         raw = cmd + mask_bytes + position_bytes
         await self.hass.data[DOMAIN].async_publish(
             self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
@@ -239,9 +228,9 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
         """Close the cover tilt."""
         cmd = b"\x00\x02"
         position = 0x00
-        position_bytes = position.to_bytes(1, byteorder='little')
-        mask = 0xff & (0x01 << (self._index - 1))
-        mask_bytes = mask.to_bytes(1, byteorder='little')
+        position_bytes = position.to_bytes(1, byteorder="little")
+        mask = 0xFF & (0x01 << (self._index - 1))
+        mask_bytes = mask.to_bytes(1, byteorder="little")
         raw = cmd + mask_bytes + position_bytes
         await self.hass.data[DOMAIN].async_publish(
             self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
@@ -252,10 +241,10 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
         position = kwargs.get("tilt_position")
         if position is not None:
             cmd = b"\x00\x02"
-            position = 0xff & position
-            position_bytes = position.to_bytes(1, byteorder='little')
-            mask = 0xff & (0x01 << (self._index - 1))
-            mask_bytes = mask.to_bytes(1, byteorder='little')
+            position = 0xFF & position
+            position_bytes = position.to_bytes(1, byteorder="little")
+            mask = 0xFF & (0x01 << (self._index - 1))
+            mask_bytes = mask.to_bytes(1, byteorder="little")
             raw = cmd + mask_bytes + position_bytes
             await self.hass.data[DOMAIN].async_publish(
                 self._config[CONF_RAW_TOPIC], raw.hex(), 0, False

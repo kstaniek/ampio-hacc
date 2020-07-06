@@ -1,7 +1,7 @@
 """Helper to handle a set of topics to subscribe to."""
+import logging
 from collections import deque
 from functools import wraps
-import logging
 from typing import Any
 
 from homeassistant.helpers.typing import HomeAssistantType

@@ -1,38 +1,31 @@
 """Ampio Systems Platform."""
-import logging
 import json
-from typing import Optional, Dict, Any
+import logging
+from typing import Any, Dict, Optional
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, callback
 from homeassistant.components import mqtt
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (CONF_CLIENT_ID, CONF_DEVICE,
+                                 CONF_DEVICE_CLASS, CONF_FRIENDLY_NAME,
+                                 CONF_ICON, CONF_NAME, CONF_PASSWORD,
+                                 CONF_PORT, CONF_PROTOCOL, CONF_USERNAME,
+                                 EVENT_HOMEASSISTANT_STOP)
+from homeassistant.core import Event, callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.entity_registry import async_get_registry, EntityRegistry
-from homeassistant.helpers import config_validation as cv, event, template
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
-from homeassistant.const import (
-    CONF_NAME,
-    CONF_CLIENT_ID,
-    CONF_USERNAME,
-    CONF_FRIENDLY_NAME,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_PROTOCOL,
-    EVENT_HOMEASSISTANT_STOP,
-    CONF_DEVICE,
-    CONF_DEVICE_CLASS,
-    CONF_ICON,
-)
+from homeassistant.helpers import event, template
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_registry import (EntityRegistry,
+                                                   async_get_registry)
+from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 from .client import AmpioAPI
+from .const import (AMPIO_CONNECTED, CONF_BROKER, CONF_STATE_TOPIC,
+                    CONF_UNIQUE_ID, PROTOCOL_311)
 from .models import AmpioModuleInfo
-from .const import PROTOCOL_311, CONF_BROKER, AMPIO_CONNECTED, CONF_UNIQUE_ID, CONF_STATE_TOPIC
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,8 +121,10 @@ async def platform_async_setup_entry(
     """
     _LOGGER.debug("Platform async setup entry")
 
+
 class BaseAmpioEntity(Entity):
     """Base class for Ampio Entity."""
+
     def __init__(self, config, config_entry):
         """Initialize the sensor."""
         self._config: Dict[str, Any] = config
@@ -162,7 +157,6 @@ class BaseAmpioEntity(Entity):
         """Return the icon."""
         return self._config.get(CONF_ICON)
 
-
     async def subscribe_topics(self):
         """Call to subscribe topics for entity."""
         return
@@ -172,7 +166,9 @@ class BaseAmpioEntity(Entity):
         await self.subscribe_topics()
         entity_registry: EntityRegistry = await async_get_registry(self.hass)
         if self.registry_entry.name is None:
-            entity_registry.async_update_entity(self.entity_id, name=self._config[CONF_FRIENDLY_NAME])
+            entity_registry.async_update_entity(
+                self.entity_id, name=self._config[CONF_FRIENDLY_NAME]
+            )
 
     @property
     def device_state_attributes(self) -> Optional[Dict[str, Any]]:
@@ -184,10 +180,7 @@ class BaseAmpioEntity(Entity):
         if state_topic:
             parts = state_topic.split("/")
             if len(parts) > 1:
-                return {
-                    "value": parts[-2],
-                    "index": parts[-1]
-                }
+                return {"value": parts[-2], "index": parts[-1]}
         return None
 
 
@@ -228,5 +221,5 @@ class AmpioEntityDeviceInfo(Entity):
             "model": self.device_info.get("model"),
             "manufacturer": self.device_info.get("manufacturer"),
             "module": self.device_info.get("name"),
-            "sw_version":  self.device_info.get("sw_version"),
+            "sw_version": self.device_info.get("sw_version"),
         }

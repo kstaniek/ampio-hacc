@@ -1,36 +1,26 @@
 """Ampio MQTT api implementation."""
 import asyncio
-import logging
-from itertools import groupby
-from typing import List, Optional
-from operator import attrgetter
-import re
-
 import json
+import logging
+import re
+from itertools import groupby
+from operator import attrgetter
+from typing import List, Optional
 
-from homeassistant.core import callback, Callable
+import homeassistant.helpers.device_registry as dr
 from homeassistant.components.mqtt import MQTT, Subscription
 from homeassistant.components.mqtt.models import MessageCallbackType
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.config_entries import ConfigEntry
-import homeassistant.helpers.device_registry as dr
-from homeassistant.helpers.dispatcher import (
-    dispatcher_send,
-    async_dispatcher_send,
-)
 from homeassistant.const import CONF_PORT
+from homeassistant.core import Callable, callback
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import (async_dispatcher_send,
+                                              dispatcher_send)
+from homeassistant.helpers.typing import HomeAssistantType
 
+from .const import (AMPIO_CONNECTED, AMPIO_DISCONNECTED, AMPIO_DISCOVERY_NEW,
+                    CONF_BROKER, CONFIG_ENTRY_IS_SETUP, DATA_CONFIG_ENTRY_LOCK)
 from .models import AmpioModuleInfo, ItemName
-from .const import (
-    AMPIO_CONNECTED,
-    AMPIO_DISCONNECTED,
-    CONF_BROKER,
-    AMPIO_DISCOVERY_NEW,
-    DATA_CONFIG_ENTRY_LOCK,
-    CONFIG_ENTRY_IS_SETUP,
-)
-
 
 AMPIO_TO_INFO_TOPIC = "ampio/to/info/version"
 AMPIO_FROM_INFO_TOPIC = "ampio/from/info/version"

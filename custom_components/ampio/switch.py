@@ -1,23 +1,17 @@
 """Ampio Switch."""
 import logging
 
-from homeassistant.core import callback
 from homeassistant.components import switch
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.const import CONF_DEVICE
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-
-from .models import AmpioModuleInfo
-from .const import (
-    AMPIO_DISCOVERY_NEW,
-    DOMAIN,
-    CONF_STATE_TOPIC,
-    CONF_COMMAND_TOPIC,
-    DEFAULT_QOS,
-)
-from . import AmpioEntityDeviceInfo, subscription, BaseAmpioEntity
+from . import AmpioEntityDeviceInfo, BaseAmpioEntity, subscription
+from .const import (AMPIO_DISCOVERY_NEW, CONF_COMMAND_TOPIC, CONF_STATE_TOPIC,
+                    DEFAULT_QOS, DOMAIN)
 from .debug_info import log_messages
+from .models import AmpioModuleInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +41,6 @@ class AmpioSwitch(BaseAmpioEntity, AmpioEntityDeviceInfo, switch.SwitchEntity):
 
         device_config = config.get(CONF_DEVICE)
         AmpioEntityDeviceInfo.__init__(self, device_config, config_entry)
-
 
     async def subscribe_topics(self):
         """(Re)Subscribe to topics."""

@@ -1,8 +1,7 @@
 """Data validators."""
-from typing import Any, Union, TypeVar, List
+from typing import Any, List, TypeVar, Union
 
 import voluptuous as vol
-
 
 ATTR_MAC = "mac"
 ATTR_USERMAC = "user_mac"

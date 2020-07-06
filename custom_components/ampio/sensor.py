@@ -5,27 +5,22 @@ from typing import Optional
 
 import voluptuous as vol
 
-from homeassistant.components import mqtt, sensor
-from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
+from homeassistant.components import mqtt, sensor
 from homeassistant.components.sensor import DEVICE_CLASSES_SCHEMA
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
-from homeassistant.helpers.entity import Entity
+from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
+                                 CONF_FORCE_UPDATE, CONF_ICON, CONF_NAME,
+                                 CONF_UNIT_OF_MEASUREMENT)
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_DEVICE_CLASS,
-    CONF_FORCE_UPDATE,
-    CONF_ICON,
-    CONF_NAME,
-    CONF_UNIT_OF_MEASUREMENT,
-)
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-
+from . import (CONF_UNIQUE_ID, AmpioEntityDeviceInfo, BaseAmpioEntity,
+               subscription)
 from .const import AMPIO_DISCOVERY_NEW, CONF_STATE_TOPIC, DEFAULT_QOS
-from . import CONF_UNIQUE_ID, AmpioEntityDeviceInfo, subscription, BaseAmpioEntity
-from .models import AmpioModuleInfo
 from .debug_info import log_messages
+from .models import AmpioModuleInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +72,6 @@ class AmpioSensor(BaseAmpioEntity, AmpioEntityDeviceInfo, Entity):
         device_config = config.get(CONF_DEVICE)
         AmpioEntityDeviceInfo.__init__(self, device_config, config_entry)
 
-
     async def subscribe_topics(self):
         """(Re)Subscribe to topics."""
 
@@ -110,7 +104,6 @@ class AmpioSensor(BaseAmpioEntity, AmpioEntityDeviceInfo, Entity):
         self._sub_state = await subscription.async_unsubscribe_topics(
             self.hass, self._sub_state
         )
-
 
     @property
     def unit_of_measurement(self):

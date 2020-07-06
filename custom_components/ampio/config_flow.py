@@ -4,14 +4,9 @@ from collections import OrderedDict
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import (
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-)
-from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.mqtt.config_flow import try_connection
-
+from homeassistant.components.mqtt.const import CONF_BROKER
+from homeassistant.const import CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 
 DOMAIN = "ampio"
 CLIENT_ID = "HomeAssistant-{}".format("12312312")

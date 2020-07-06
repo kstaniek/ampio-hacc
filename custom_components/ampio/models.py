@@ -1,55 +1,30 @@
 """Ampio data models."""
 from __future__ import annotations
+
 import base64
-from typing import Callable, Union, Dict, List, Any
-import attr
-from enum import IntEnum
 from collections import defaultdict
+from enum import IntEnum
+from typing import Any, Callable, Dict, List, Union
 
+import attr
+
+from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
+                                 CONF_FRIENDLY_NAME, CONF_ICON, CONF_NAME,
+                                 CONF_UNIT_OF_MEASUREMENT)
 from homeassistant.helpers import device_registry
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_DEVICE_CLASS,
-    CONF_ICON,
-    CONF_FRIENDLY_NAME,
-    CONF_NAME,
-    CONF_UNIT_OF_MEASUREMENT,
-)
 
-from .const import (
-    DOMAIN,
-    CONF_STATE_TOPIC,
-    CONF_UNIQUE_ID,
-    CONF_COMMAND_TOPIC,
-    CONF_TILT_POSITION_TOPIC,
-    CONF_BRIGHTNESS_COMMAND_TOPIC,
-    CONF_BRIGHTNESS_STATE_TOPIC,
-    CONF_CLOSING_STATE_TOPIC,
-    CONF_OPENING_STATE_TOPIC,
-    CONF_RAW_TOPIC,
-)
-
-from .validators import (
-    AMPIO_DEVICES_SCHEMA,
-    AMPIO_DESCRIPTIONS_SCHEMA,
-    ATTR_MAC,
-    ATTR_USERMAC,
-    ATTR_TYPE,
-    ATTR_PCB,
-    ATTR_SOFTWARE,
-    ATTR_PROTOCOL,
-    ATTR_BI,
-    ATTR_BO,
-    ATTR_AI,
-    ATTR_AO,
-    ATTR_FLAG,
-    ATTR_NAME,
-    ATTR_DEVICES,
-    ATTR_DATE_PROD,
-    ATTR_D,
-    ATTR_T,
-    ATTR_N,
-)
+from .const import (CONF_BRIGHTNESS_COMMAND_TOPIC, CONF_BRIGHTNESS_STATE_TOPIC,
+                    CONF_CLOSING_STATE_TOPIC, CONF_COMMAND_TOPIC,
+                    CONF_OPENING_STATE_TOPIC, CONF_RAW_TOPIC,
+                    CONF_RGB_COMMAND_TOPIC, CONF_RGB_STATE_TOPIC,
+                    CONF_STATE_TOPIC, CONF_TILT_POSITION_TOPIC, CONF_UNIQUE_ID,
+                    CONF_WHITE_VALUE_COMMAND_TOPIC,
+                    CONF_WHITE_VALUE_STATE_TOPIC, DOMAIN)
+from .validators import (AMPIO_DESCRIPTIONS_SCHEMA, AMPIO_DEVICES_SCHEMA,
+                         ATTR_AI, ATTR_AO, ATTR_BI, ATTR_BO, ATTR_D,
+                         ATTR_DATE_PROD, ATTR_DEVICES, ATTR_FLAG, ATTR_MAC,
+                         ATTR_N, ATTR_NAME, ATTR_PCB, ATTR_PROTOCOL,
+                         ATTR_SOFTWARE, ATTR_T, ATTR_TYPE, ATTR_USERMAC)
 
 DEVICE_CLASSES = {
     "B": "battery",
@@ -332,25 +307,23 @@ class MCONModuleInfo(AmpioModuleInfo):
         super().update_configs()
         if self.software % 100 == 1:  # INTEGRA
             for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
-                data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
+                data = AmpioBinarySensorExtendedConfig.from_ampio_device(
+                    self, item, index + 1
+                )
                 if data:
                     self.configs["binary_sensor"].append(data.config)
 
             for index, item in self.names.get(ItemTypes.BinaryInput509, {}).items():
-                data = AmpioBinarySensorConfig.from_ampio_device(
+                data = AmpioBinarySensorExtendedConfig.from_ampio_device(
                     self, item, index + 255
                 )
                 if data:
                     self.configs["binary_sensor"].append(data.config)
 
             for index, item in self.names.get(ItemTypes.AnalogOutput254, {}).items():
-                data = AmpioSatelConfig.from_ampio_device(
-                    self, item, index + 1
-                )
+                data = AmpioSatelConfig.from_ampio_device(self, item, index + 1)
                 if data:
                     self.configs["alarm_control_panel"].append(data.config)
-
-
 
 
 class MLED1ModuleInfo(AmpioModuleInfo):
@@ -419,7 +392,7 @@ class MDOTModuleInfo(AmpioModuleInfo):
             item = self.names.get(ItemTypes.BinaryInput254, {}).get(index)
             if item is None:
                 item = ItemName(base64encode(f"{self.name} Touch"))
-            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
+            data = AmpioTouchSensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["binary_sensor"].append(data.config)
 
@@ -450,6 +423,13 @@ class MDOT15LCDModuleInfo(MDOTModuleInfo):
 
 class MRGBu1ModuleInfo(AmpioModuleInfo):
     """MRGB-1u Ampio module information."""
+
+    def update_configs(self) -> None:
+        """Update module specific configuration."""
+        super().update_configs()
+        data = AmpioRGBLightConfig.from_ampio_device(self, None, 1)
+        if data:
+            self.configs["light"].append(data.config)
 
 
 class MSERV3sModuleInfo(AmpioModuleInfo):
@@ -645,7 +625,27 @@ class AmpioAirqualitySensorConfig(AmpioConfig):
         return cls(config=config)
 
 
-class AmpioBinarySensorConfig(AmpioConfig):
+class AmpioTouchSensorConfig(AmpioConfig):
+    """Ampio Binary Sensor Entity Configuration."""
+
+    @classmethod
+    def from_ampio_device(cls, ampio_device: AmpioModuleInfo, item: ItemName, index=1):
+        """Create config from ampio device."""
+        mac = ampio_device.user_mac
+
+        config = {
+            CONF_UNIQUE_ID: f"ampio-{mac}-i{index}",
+            CONF_NAME: f"{mac}-i{index}",
+            CONF_FRIENDLY_NAME: item.name,
+            CONF_STATE_TOPIC: f"ampio/from/{mac}/state/i/{index}",
+            CONF_DEVICE: ampio_device.as_hass_device(),
+            CONF_DEVICE_CLASS: "opening",
+        }
+
+        return cls(config=config)
+
+
+class AmpioBinarySensorExtendedConfig(AmpioConfig):
     """Ampio Binary Sensor Entity Configuration."""
 
     @classmethod
@@ -658,6 +658,28 @@ class AmpioBinarySensorConfig(AmpioConfig):
             CONF_NAME: f"{mac}-bi{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/bi/{index}",
+            CONF_DEVICE: ampio_device.as_hass_device(),
+        }
+
+        if device_class:
+            config[CONF_DEVICE_CLASS] = device_class
+
+        return cls(config=config)
+
+
+class AmpioBinarySensorConfig(AmpioConfig):
+    """Ampio Binary Sensor Entity Configuration."""
+
+    @classmethod
+    def from_ampio_device(cls, ampio_device: AmpioModuleInfo, item: ItemName, index=1):
+        """Create config from ampio device."""
+        mac = ampio_device.user_mac
+        device_class = item.device_class
+        config = {
+            CONF_UNIQUE_ID: f"ampio-{mac}-i{index}",
+            CONF_NAME: f"{mac}-i{index}",
+            CONF_FRIENDLY_NAME: item.name,
+            CONF_STATE_TOPIC: f"ampio/from/{mac}/state/i/{index}",
             CONF_DEVICE: ampio_device.as_hass_device(),
         }
 
@@ -689,7 +711,11 @@ class AmpioDimmableLightConfig(AmpioConfig):
         if device_class:
             config[CONF_DEVICE_CLASS] = device_class
 
+        if ampio_device.code == ModuleCodes.MLED1:
+            config[CONF_ICON] = "mdi:spotlight"
+
         return cls(config=config)
+
 
 class AmpioLightConfig(AmpioConfig):
     """Ampio Light Entity Configuration."""
@@ -710,6 +736,29 @@ class AmpioLightConfig(AmpioConfig):
 
         if device_class:
             config[CONF_DEVICE_CLASS] = device_class
+
+        return cls(config=config)
+
+
+class AmpioRGBLightConfig(AmpioConfig):
+    """Ampio RGB Light Entity Configuration."""
+
+    @classmethod
+    def from_ampio_device(cls, ampio_device: AmpioModuleInfo, item=None, index=1):
+        """Create config from ampio device."""
+        mac = ampio_device.user_mac
+        name = ampio_device.name or "RGBW"
+        index = 1
+        config = {
+            CONF_UNIQUE_ID: f"ampio-{mac}-rgbw{index}",
+            CONF_NAME: f"{mac}-rgbw{index}",
+            CONF_FRIENDLY_NAME: name,
+            CONF_RGB_STATE_TOPIC: f"ampio/from/{mac}/state/rgbw/{index}",
+            CONF_RGB_COMMAND_TOPIC: f"ampio/to/{mac}/rgbw/{index}/cmd",
+            CONF_WHITE_VALUE_STATE_TOPIC: f"ampio/from/{mac}/state/a/4",
+            CONF_WHITE_VALUE_COMMAND_TOPIC: f"ampio/to/{mac}/o/4/cmd",
+            CONF_DEVICE: ampio_device.as_hass_device(),
+        }
 
         return cls(config=config)
 
@@ -765,6 +814,7 @@ class AmpioFlagConfig(AmpioConfig):
 
         return cls(config=config)
 
+
 class AmpioCoverConfig(AmpioConfig):
     """Ampio Cover Entity Configuration."""
 
@@ -792,10 +842,9 @@ class AmpioCoverConfig(AmpioConfig):
         }
 
         if device_class not in ["garage", "valve"]:
-            config.update({
-                CONF_TILT_POSITION_TOPIC: f"ampio/from/{mac}/state/a/{6+index}",
-            })
-
+            config.update(
+                {CONF_TILT_POSITION_TOPIC: f"ampio/from/{mac}/state/a/{6+index}",}
+            )
 
         if device_class:
             config[CONF_DEVICE_CLASS] = device_class
@@ -804,6 +853,7 @@ class AmpioCoverConfig(AmpioConfig):
             config[CONF_ICON] = icon
 
         return cls(config=config)
+
 
 class AmpioSatelConfig(AmpioConfig):
     """Ampio Satel Entity Configuration."""

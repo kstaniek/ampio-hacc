@@ -4,12 +4,11 @@ from typing import Any, Callable, Dict, Optional
 
 import attr
 
-from homeassistant.components import mqtt
 from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.loader import bind_hass
 
 from . import debug_info
-from .const import DEFAULT_QOS
+from .const import DEFAULT_QOS, DOMAIN
 from .models import MessageCallbackType
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,8 +44,8 @@ class EntitySubscription:
         # Prepare debug data
         debug_info.add_subscription(self.hass, self.message_callback, self.topic)
 
-        self.unsubscribe_callback = await mqtt.async_subscribe(
-            hass, self.topic, self.message_callback, self.qos, self.encoding
+        self.unsubscribe_callback = await hass.data[DOMAIN].async_subscribe(
+            self.topic, self.message_callback, self.qos, self.encoding
         )
 
     def _should_resubscribe(self, other):
