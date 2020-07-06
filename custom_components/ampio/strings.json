@@ -1,0 +1,22 @@
+{
+    "config": {
+      "step": {
+        "broker": {
+          "description": "Please enter the connection information of your MQTT broker.",
+          "data": {
+            "broker": "Broker",
+            "port": "[%key:common::config_flow::data::port%]",
+            "username": "[%key:common::config_flow::data::username%]",
+            "password": "[%key:common::config_flow::data::password%]",
+            "discovery": "Enable discovery"
+          }
+        }
+      },
+      "abort": {
+        "single_instance_allowed": "Only a single configuration of MQTT is allowed."
+      },
+      "error": {
+        "cannot_connect": "Unable to connect to the broker."
+      }
+    }
+}

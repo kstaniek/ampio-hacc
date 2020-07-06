@@ -1,0 +1,9 @@
+{
+    "domain": "ampio",
+    "name": "Ampio System",
+    "config_flow": true,
+    "documentation": "https://www.example.com",
+    "dependencies": [],
+    "codeowners": [],
+    "requirements": ["paho-mqtt==1.5.0"]
+  }

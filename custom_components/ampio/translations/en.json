@@ -1,0 +1,30 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Ampio is already configured",
+            "already_in_progress": "Ampio configuration is already in progress"
+        },
+        "error": {
+            "connection_error": "Can't connect to Ampio MQTT Broker",
+            "invalid_password": "Invalid password!",
+            "resolve_error": "Can't resolve address of the Ampio MQTT Broker."
+        },
+        "flow_title": "Ampio: {name}",
+        "step": {
+            "discovery_confirm": {
+                "description": "Do you want to add the Ampio node `{name}` to Home Assistant?",
+                "title": "Discovered Ampio node"
+            },
+            "broker": {
+                "data": {
+                    "broker": "Host",
+                    "discovery": "Enable discovery",
+                    "port": "Port",
+                    "username": "Username",
+                    "password": "Password"
+                },
+                "description": "Please enter connection settings of your Ampio MQTT broker."
+            }
+        }
+    }
+}
