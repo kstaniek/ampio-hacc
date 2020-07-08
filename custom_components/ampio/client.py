@@ -243,8 +243,3 @@ async def _async_setup_device_registry(
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id, **device_info.as_hass_device()
     )
-
-
-# async def _sync_setup_entities(
-#     hass: HomeAssistantType, device_info
-# )

@@ -771,7 +771,6 @@ class AmpioSwitchConfig(AmpioConfig):
         """Create config from ampio device."""
         mac = ampio_device.user_mac
         device_class = item.device_class
-        print(f"SW: {device_class}")
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-bo{index}",
             CONF_NAME: f"{mac}-bo{index}",

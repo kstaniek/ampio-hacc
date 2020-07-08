@@ -5,5 +5,6 @@
     "documentation": "https://www.example.com",
     "dependencies": [],
     "codeowners": [],
+    "zeroconf": ["_ampio-mqtt._tcp.local."],
     "requirements": ["paho-mqtt==1.5.0"]
   }
