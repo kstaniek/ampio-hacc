@@ -3,28 +3,64 @@ from __future__ import annotations
 
 import base64
 from collections import defaultdict
+import datetime as dt
 from enum import IntEnum
 from typing import Any, Callable, Dict, List, Union
 
 import attr
 
-from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
-                                 CONF_FRIENDLY_NAME, CONF_ICON, CONF_NAME,
-                                 CONF_UNIT_OF_MEASUREMENT)
+from homeassistant.const import (
+    CONF_DEVICE,
+    CONF_DEVICE_CLASS,
+    CONF_FRIENDLY_NAME,
+    CONF_ICON,
+    CONF_NAME,
+    CONF_UNIT_OF_MEASUREMENT,
+)
 from homeassistant.helpers import device_registry
 
-from .const import (CONF_BRIGHTNESS_COMMAND_TOPIC, CONF_BRIGHTNESS_STATE_TOPIC,
-                    CONF_CLOSING_STATE_TOPIC, CONF_COMMAND_TOPIC,
-                    CONF_OPENING_STATE_TOPIC, CONF_RAW_TOPIC,
-                    CONF_RGB_COMMAND_TOPIC, CONF_RGB_STATE_TOPIC,
-                    CONF_STATE_TOPIC, CONF_TILT_POSITION_TOPIC, CONF_UNIQUE_ID,
-                    CONF_WHITE_VALUE_COMMAND_TOPIC,
-                    CONF_WHITE_VALUE_STATE_TOPIC, DOMAIN)
-from .validators import (AMPIO_DESCRIPTIONS_SCHEMA, AMPIO_DEVICES_SCHEMA,
-                         ATTR_AI, ATTR_AO, ATTR_BI, ATTR_BO, ATTR_D,
-                         ATTR_DATE_PROD, ATTR_DEVICES, ATTR_FLAG, ATTR_MAC,
-                         ATTR_N, ATTR_NAME, ATTR_PCB, ATTR_PROTOCOL,
-                         ATTR_SOFTWARE, ATTR_T, ATTR_TYPE, ATTR_USERMAC)
+from .const import (
+    CONF_ALARM_TOPIC,
+    CONF_ARMED_TOPIC,
+    CONF_BRIGHTNESS_COMMAND_TOPIC,
+    CONF_BRIGHTNESS_STATE_TOPIC,
+    CONF_CLOSING_STATE_TOPIC,
+    CONF_COMMAND_TOPIC,
+    CONF_ENTRYTIME_TOPIC,
+    CONF_EXITTIME10_TOPIC,
+    CONF_EXITTIME_TOPIC,
+    CONF_OPENING_STATE_TOPIC,
+    CONF_RAW_TOPIC,
+    CONF_RGB_COMMAND_TOPIC,
+    CONF_RGB_STATE_TOPIC,
+    CONF_STATE_TOPIC,
+    CONF_TILT_POSITION_TOPIC,
+    CONF_UNIQUE_ID,
+    CONF_WHITE_VALUE_COMMAND_TOPIC,
+    CONF_WHITE_VALUE_STATE_TOPIC,
+    DOMAIN,
+)
+from .validators import (
+    AMPIO_DESCRIPTIONS_SCHEMA,
+    AMPIO_DEVICES_SCHEMA,
+    ATTR_AI,
+    ATTR_AO,
+    ATTR_BI,
+    ATTR_BO,
+    ATTR_D,
+    ATTR_DATE_PROD,
+    ATTR_DEVICES,
+    ATTR_FLAG,
+    ATTR_MAC,
+    ATTR_N,
+    ATTR_NAME,
+    ATTR_PCB,
+    ATTR_PROTOCOL,
+    ATTR_SOFTWARE,
+    ATTR_T,
+    ATTR_TYPE,
+    ATTR_USERMAC,
+)
 
 DEVICE_CLASSES = {
     "B": "battery",
@@ -109,6 +145,8 @@ class Message:
     payload = attr.ib(type=PublishPayloadType)
     qos = attr.ib(type=int)
     retain = attr.ib(type=bool)
+    subscribed_topic = attr.ib(type=str, default=None)
+    timestamp = attr.ib(type=dt.datetime, default=None)
 
 
 MessageCallbackType = Callable[[Message], None]
@@ -202,19 +240,23 @@ class AmpioModuleInfo:
 
     names = attr.ib(factory=dict)
     configs = attr.ib(factory=dict)
+    unique_ids = attr.ib(factory=set)
 
     def update_configs(self) -> None:
         """Update the config data for entities."""
         self.configs = defaultdict(list)  # clean up current configs
+        self.unique_ids = set()
         for index, item in self.names.get(ItemTypes.BinaryFlag, {}).items():
             data = AmpioFlagConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["switch"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
         for index, item in self.names.get(ItemTypes.OW, {}).items():
             data = AmpioTempSensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["sensor"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
     @property
     def part_number(self) -> str:
@@ -235,7 +277,7 @@ class AmpioModuleInfo:
             "manufacturer": "Ampio",
             "model": self.model,
             "sw_version": self.software,
-            "via_device": None,
+            "via_device": (DOMAIN, "ampio-mqtt"),
         }
 
     @classmethod
@@ -297,6 +339,7 @@ class MSENSModuleInfo(AmpioModuleInfo):
         ):
             if ampio_config:
                 self.configs["sensor"].append(ampio_config.config)
+                self.unique_ids.add(ampio_config.unique_id)
 
 
 class MCONModuleInfo(AmpioModuleInfo):
@@ -312,6 +355,7 @@ class MCONModuleInfo(AmpioModuleInfo):
                 )
                 if data:
                     self.configs["binary_sensor"].append(data.config)
+                    self.unique_ids.add(data.unique_id)
 
             for index, item in self.names.get(ItemTypes.BinaryInput509, {}).items():
                 data = AmpioBinarySensorExtendedConfig.from_ampio_device(
@@ -319,11 +363,13 @@ class MCONModuleInfo(AmpioModuleInfo):
                 )
                 if data:
                     self.configs["binary_sensor"].append(data.config)
+                    self.unique_ids.add(data.unique_id)
 
             for index, item in self.names.get(ItemTypes.AnalogOutput254, {}).items():
                 data = AmpioSatelConfig.from_ampio_device(self, item, index + 1)
                 if data:
                     self.configs["alarm_control_panel"].append(data.config)
+                    self.unique_ids.add(data.unique_id)
 
 
 class MLED1ModuleInfo(AmpioModuleInfo):
@@ -335,6 +381,7 @@ class MLED1ModuleInfo(AmpioModuleInfo):
             data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["light"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MDIM8sModuleInfo(AmpioModuleInfo):
@@ -346,6 +393,7 @@ class MDIM8sModuleInfo(AmpioModuleInfo):
             data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["light"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MOC4ModuleInfo(AmpioModuleInfo):
@@ -357,6 +405,7 @@ class MOC4ModuleInfo(AmpioModuleInfo):
             data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["light"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MPR8sModuleInfo(AmpioModuleInfo):
@@ -368,14 +417,17 @@ class MPR8sModuleInfo(AmpioModuleInfo):
             if item.device_class == "light":
                 data = AmpioLightConfig.from_ampio_device(self, item, index + 1)
                 self.configs["light"].append(data.config)
+                self.unique_ids.add(data.unique_id)
             else:
                 data = AmpioSwitchConfig.from_ampio_device(self, item, index + 1)
                 self.configs["switch"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
         for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
             data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["binary_sensor"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MDOTModuleInfo(AmpioModuleInfo):
@@ -395,6 +447,7 @@ class MDOTModuleInfo(AmpioModuleInfo):
             data = AmpioTouchSensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["binary_sensor"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MDOT2ModuleInfo(MDOTModuleInfo):
@@ -430,6 +483,7 @@ class MRGBu1ModuleInfo(AmpioModuleInfo):
         data = AmpioRGBLightConfig.from_ampio_device(self, None, 1)
         if data:
             self.configs["light"].append(data.config)
+            self.unique_ids.add(data.unique_id)
 
 
 class MSERV3sModuleInfo(AmpioModuleInfo):
@@ -441,11 +495,13 @@ class MSERV3sModuleInfo(AmpioModuleInfo):
             data = AmpioSwitchConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["switch"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
         for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
             data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["binary_sensor"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MROL4sModuleInfo(AmpioModuleInfo):
@@ -458,11 +514,13 @@ class MROL4sModuleInfo(AmpioModuleInfo):
             data = AmpioCoverConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["cover"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
         for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
             data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["binary_sensor"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 CLASS_FACTORY = {
@@ -487,6 +545,11 @@ class AmpioConfig:
     """Generic Ampio Config  class."""
 
     config = attr.ib(type=dict)
+
+    @property
+    def unique_id(self):
+        """Return unique_id from config."""
+        return self.config.get(CONF_UNIQUE_ID)
 
 
 class AmpioTempSensorConfig(AmpioConfig):
@@ -866,8 +929,12 @@ class AmpioSatelConfig(AmpioConfig):
             CONF_UNIQUE_ID: f"ampio-{mac}-z{index}",
             CONF_NAME: f"{mac}-z{index}",
             CONF_FRIENDLY_NAME: item.name,
-            CONF_STATE_TOPIC: f"ampio/from/{mac}/state/a/{index}",
             CONF_RAW_TOPIC: f"ampio/to/{mac}/raw",
+            CONF_ARMED_TOPIC: f"ampio/from/{mac}/state/armed/{index}",
+            CONF_ALARM_TOPIC: f"ampio/from/{mac}/state/alarm/{index}",
+            CONF_ENTRYTIME_TOPIC: f"ampio/from/{mac}/state/entrytime/{index}",
+            CONF_EXITTIME10_TOPIC: f"ampio/from/{mac}/state/exittime10/{index}",
+            CONF_EXITTIME_TOPIC: f"ampio/from/{mac}/state/exittime/{index}",
             CONF_DEVICE: ampio_device.as_hass_device(),
         }
 

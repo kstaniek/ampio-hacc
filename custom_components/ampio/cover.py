@@ -1,45 +1,39 @@
 """Ampio Cover."""
+import functools
 import logging
 
 from homeassistant.components import cover
-from homeassistant.const import CONF_DEVICE
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-from . import AmpioEntityDeviceInfo, BaseAmpioEntity, subscription
-from .const import (AMPIO_DISCOVERY_NEW, CONF_CLOSING_STATE_TOPIC,
-                    CONF_COMMAND_TOPIC, CONF_OPENING_STATE_TOPIC,
-                    CONF_RAW_TOPIC, CONF_STATE_TOPIC, CONF_TILT_POSITION_TOPIC,
-                    DEFAULT_QOS, DOMAIN)
+from . import discovery, subscription
+from .client import async_publish
+from .const import (
+    CONF_CLOSING_STATE_TOPIC,
+    CONF_COMMAND_TOPIC,
+    CONF_OPENING_STATE_TOPIC,
+    CONF_RAW_TOPIC,
+    CONF_STATE_TOPIC,
+    CONF_TILT_POSITION_TOPIC,
+    DATA_AMPIO,
+    DATA_AMPIO_DISPATCHERS,
+    DEFAULT_QOS,
+    SIGNAL_ADD_ENTITIES,
+)
 from .debug_info import log_messages
-from .models import AmpioModuleInfo
+from .entity import AmpioEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistantType, config_entry: ConfigType, async_add_entities
-):
-    """Set up MQTT sensors dynamically through MQTT discovery."""
-
-    async def async_discover_switch(module: AmpioModuleInfo):
-        """Discover and add a discovered MQTT sensor."""
-        configs = module.configs.get(cover.DOMAIN)
-        entities = [AmpioCover(config, config_entry) for config in configs]
-        async_add_entities(entities)
-
-    async_dispatcher_connect(
-        hass, AMPIO_DISCOVERY_NEW.format(cover.DOMAIN, "ampio"), async_discover_switch
-    )
-
-
-class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
+class AmpioCover(AmpioEntity, cover.CoverEntity):
     """Representation of Ampio Cover."""
 
-    def __init__(self, config, config_entry):
-        """Initialize the sensor."""
-        BaseAmpioEntity.__init__(self, config, config_entry)
+    def __init__(self, config):
+        """Initialize the light component."""
+        AmpioEntity.__init__(self, config)
+
         self._cover_position = None
         self._tilt_position = None
         self._opening = None
@@ -51,8 +45,8 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
             parts = state_topic.split("/")
             self._index = int(parts[-1])
 
-        device_config = config.get(CONF_DEVICE)
-        AmpioEntityDeviceInfo.__init__(self, device_config, config_entry)
+        # AmpioModuleDiscoveryUpdate.__init__(self, self.discovery_update)
+        # AmpioEntityDeviceInfo.__init__(self, device_info, config_entry)
 
     async def subscribe_topics(self):
         """(Re)Subscribe to topics."""
@@ -180,21 +174,15 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
 
     async def async_open_cover(self, **kwargs):
         """Open the cover."""
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_COMMAND_TOPIC], 2, 0, False
-        )
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 2, 0, False)
 
     async def async_close_cover(self, **kwargs):
         """Close cover."""
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_COMMAND_TOPIC], 1, 0, False
-        )
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 1, 0, False)
 
     async def async_stop_cover(self, **kwargs):
         """Close cover."""
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_COMMAND_TOPIC], 0, 0, False
-        )
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 0, 0, False)
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
@@ -208,9 +196,7 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
             raw = (
                 cmd + mask_bytes + position_bytes + b"\x66"
             )  # tilt to previous position
-            await self.hass.data[DOMAIN].async_publish(
-                self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
-            )
+            async_publish(self.hass, self._config[CONF_RAW_TOPIC], raw.hex(), 0, False)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Open the cover tilt."""
@@ -220,9 +206,7 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
         mask = 0xFF & (0x01 << (self._index - 1))
         mask_bytes = mask.to_bytes(1, byteorder="little")
         raw = cmd + mask_bytes + position_bytes
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
-        )
+        async_publish(self.hass, self._config[CONF_RAW_TOPIC], raw.hex(), 0, False)
 
     async def async_close_cover_tilt(self, **kwargs):
         """Close the cover tilt."""
@@ -232,9 +216,7 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
         mask = 0xFF & (0x01 << (self._index - 1))
         mask_bytes = mask.to_bytes(1, byteorder="little")
         raw = cmd + mask_bytes + position_bytes
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
-        )
+        async_publish(self.hass, self._config[CONF_RAW_TOPIC], raw.hex(), 0, False)
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""
@@ -246,9 +228,27 @@ class AmpioCover(BaseAmpioEntity, AmpioEntityDeviceInfo, cover.CoverEntity):
             mask = 0xFF & (0x01 << (self._index - 1))
             mask_bytes = mask.to_bytes(1, byteorder="little")
             raw = cmd + mask_bytes + position_bytes
-            await self.hass.data[DOMAIN].async_publish(
-                self._config[CONF_RAW_TOPIC], raw.hex(), 0, False
-            )
+            async_publish(self.hass, self._config[CONF_RAW_TOPIC], raw.hex(), 0, False)
 
     async def async_stop_cover_tilt(self, **kwargs):
         """Stop the cover."""
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 0, 0, False)
+
+
+async def async_setup_entry(
+    hass: HomeAssistantType, config_entry: ConfigType, async_add_entities
+):
+    """Set up MQTT sensors dynamically through MQTT discovery."""
+    entities_to_create = hass.data[DATA_AMPIO][cover.DOMAIN]
+
+    unsub = async_dispatcher_connect(
+        hass,
+        SIGNAL_ADD_ENTITIES,
+        functools.partial(
+            discovery.async_add_entities,
+            async_add_entities,
+            entities_to_create,
+            AmpioCover,
+        ),
+    )
+    hass.data[DATA_AMPIO][DATA_AMPIO_DISPATCHERS].append(unsub)

@@ -1,46 +1,34 @@
 """Ampio Switch."""
+import functools
 import logging
 
 from homeassistant.components import switch
-from homeassistant.const import CONF_DEVICE
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
-from . import AmpioEntityDeviceInfo, BaseAmpioEntity, subscription
-from .const import (AMPIO_DISCOVERY_NEW, CONF_COMMAND_TOPIC, CONF_STATE_TOPIC,
-                    DEFAULT_QOS, DOMAIN)
+from . import discovery, subscription
+from .client import async_publish
+from .const import (
+    CONF_COMMAND_TOPIC,
+    CONF_STATE_TOPIC,
+    DATA_AMPIO,
+    DATA_AMPIO_DISPATCHERS,
+    DEFAULT_QOS,
+    SIGNAL_ADD_ENTITIES,
+)
 from .debug_info import log_messages
-from .models import AmpioModuleInfo
+from .entity import AmpioEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistantType, config_entry: ConfigType, async_add_entities
-):
-    """Set up MQTT sensors dynamically through MQTT discovery."""
-
-    async def async_discover_switch(module: AmpioModuleInfo):
-        """Discover and add a discovered MQTT sensor."""
-        configs = module.configs.get(switch.DOMAIN)
-        entities = [AmpioSwitch(config, config_entry) for config in configs]
-        async_add_entities(entities)
-
-    async_dispatcher_connect(
-        hass, AMPIO_DISCOVERY_NEW.format(switch.DOMAIN, "ampio"), async_discover_switch
-    )
-
-
-class AmpioSwitch(BaseAmpioEntity, AmpioEntityDeviceInfo, switch.SwitchEntity):
+class AmpioSwitch(AmpioEntity, switch.SwitchEntity):
     """Representation of Ampio Light."""
 
-    def __init__(self, config, config_entry):
+    def __init__(self, config):
         """Initialize the sensor."""
-        BaseAmpioEntity.__init__(self, config, config_entry)
-
-        device_config = config.get(CONF_DEVICE)
-        AmpioEntityDeviceInfo.__init__(self, device_config, config_entry)
+        AmpioEntity.__init__(self, config)
 
     async def subscribe_topics(self):
         """(Re)Subscribe to topics."""
@@ -82,13 +70,28 @@ class AmpioSwitch(BaseAmpioEntity, AmpioEntityDeviceInfo, switch.SwitchEntity):
 
     async def async_turn_off(self, **kwargs):
         """Turn the entity off."""
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_COMMAND_TOPIC], 0, 0, False
-        )
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 0, 0, False)
 
     async def async_turn_on(self, **kwargs):
         """Turn the entity on."""
 
-        await self.hass.data[DOMAIN].async_publish(
-            self._config[CONF_COMMAND_TOPIC], 1, 0, False
-        )
+        async_publish(self.hass, self._config[CONF_COMMAND_TOPIC], 1, 0, False)
+
+
+async def async_setup_entry(
+    hass: HomeAssistantType, config_entry: ConfigType, async_add_entities
+):
+    """Set up MQTT sensors dynamically through MQTT discovery."""
+    entities_to_create = hass.data[DATA_AMPIO][switch.DOMAIN]
+
+    unsub = async_dispatcher_connect(
+        hass,
+        SIGNAL_ADD_ENTITIES,
+        functools.partial(
+            discovery.async_add_entities,
+            async_add_entities,
+            entities_to_create,
+            AmpioSwitch,
+        ),
+    )
+    hass.data[DATA_AMPIO][DATA_AMPIO_DISPATCHERS].append(unsub)

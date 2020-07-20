@@ -1,11 +1,12 @@
 """Helper to handle a set of topics to subscribe to."""
-import logging
 from collections import deque
 from functools import wraps
+import logging
 from typing import Any
 
 from homeassistant.helpers.typing import HomeAssistantType
 
+from .const import ATTR_DISCOVERY_PAYLOAD
 from .models import MessageCallbackType
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,3 +71,20 @@ def remove_subscription(hass, message_callback, subscription):
             hass.data[DATA_MQTT_DEBUG_INFO]["entities"][entity_id]["subscriptions"].pop(
                 subscription
             )
+
+
+def add_entity_discovery_data(hass, discovery_data, entity_id):
+    """Add discovery data."""
+    debug_info = hass.data.setdefault(
+        DATA_MQTT_DEBUG_INFO, {"entities": {}, "triggers": {}}
+    )
+    entity_info = debug_info["entities"].setdefault(
+        entity_id, {"subscriptions": {}, "discovery_data": {}}
+    )
+    entity_info["discovery_data"] = discovery_data
+
+
+def update_entity_discovery_data(hass, discovery_payload, entity_id):
+    """Update discovery data."""
+    entity_info = hass.data[DATA_MQTT_DEBUG_INFO]["entities"][entity_id]
+    entity_info["discovery_data"][ATTR_DISCOVERY_PAYLOAD] = discovery_payload
