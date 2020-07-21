@@ -1,17 +1,15 @@
 """Ampio Alarm Control Panel."""
+import asyncio
 import functools
 import logging
-from typing import Union
+from typing import Optional, Union
 
 from homeassistant.components import alarm_control_panel as alarm
 from homeassistant.const import (
     STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_CUSTOM_BYPASS,
     STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMED_NIGHT,
     STATE_ALARM_ARMING,
     STATE_ALARM_DISARMED,
-    STATE_ALARM_DISARMING,
     STATE_ALARM_PENDING,
     STATE_ALARM_TRIGGERED,
     STATE_UNKNOWN,
@@ -25,9 +23,11 @@ from .client import async_publish
 from .const import (
     CONF_ALARM_TOPIC,
     CONF_ARMED_TOPIC,
+    CONF_AWAY_ZONES,
     CONF_ENTRYTIME_TOPIC,
     CONF_EXITTIME10_TOPIC,
     CONF_EXITTIME_TOPIC,
+    CONF_HOME_ZONES,
     CONF_RAW_TOPIC,
     DATA_AMPIO,
     DATA_AMPIO_DISPATCHERS,
@@ -35,6 +35,7 @@ from .const import (
     SIGNAL_ADD_ENTITIES,
 )
 from .entity import AmpioEntity
+from .models import IndexIntData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,43 +48,58 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         AmpioEntity.__init__(self, config)
 
         self._state = STATE_UNKNOWN
-        self._armed = None
-        self._alarm = None
-        self._exittime = None
-        self._exittime10 = None
-        self._entrytime = None
-        self._zone = None
+        self._armed = set()
+        self._alarm = set()
+        self._exittime = set()
+        self._exittime10 = set()
+        self._entrytime = set()
 
-        topic = self._config.get(CONF_ALARM_TOPIC)
-        parts = topic.split("/")
-        self._zone = int(parts[-1])
-        mask = (0x01 << (self._zone - 1)) & 0xFFFFFFFF
-        self._zone_mask: bytes = mask.to_bytes(4, byteorder="little")
+        self._home_zones = set()
+        self._home_cmd_data: Optional[str] = None
+        self._away_zones = set()
+        self._away_cmd_data: Optional[str] = None
+        self._all_cmd_data: Optional[str] = None
+        self._supported_features = 0
+
+        if CONF_AWAY_ZONES in self._config:
+            self._away_zones = self._config[CONF_AWAY_ZONES]
+            self._supported_features |= alarm.SUPPORT_ALARM_ARM_AWAY
+            mask = 0
+            for zone in self._away_zones:
+                mask |= (0x01 << (zone - 1)) & 0xFFFFFFFF
+            self._away_cmd_data = mask.to_bytes(4, byteorder="little").hex()
+
+        if CONF_HOME_ZONES in self._config:
+            self._home_zones = self._config[CONF_HOME_ZONES]
+            self._supported_features |= alarm.SUPPORT_ALARM_ARM_HOME
+            mask = 0
+            for zone in self._home_zones:
+                mask |= (0x01 << (zone - 1)) & 0xFFFFFFFF
+            self._home_cmd_data = mask.to_bytes(4, byteorder="little").hex()
+
+        all_zones = self._home_zones | self._away_zones
+        mask = 0
+        for zone in all_zones:
+            mask |= (0x01 << (zone - 1)) & 0xFFFFFFFF
+        self._all_cmd_data = mask.to_bytes(4, byteorder="little").hex()
 
     @property
     def state(self) -> Union[None, str, int, float]:
         """Return the state of the entity."""
-        # _LOGGER.debug("%s,%s,%s,%s,%s", self._armed, self._alarm, self._exittime, self._exittime10, self._entrytime)
-        if None in (
-            self._armed,
-            self._alarm,
-            self._exittime,
-            self._exittime10,
-            self._entrytime,
-        ):
-            return None
+        if self._away_zones == self._armed & self._away_zones:
+            self._state = STATE_ALARM_ARMED_AWAY
+
+        if self._home_zones == self._armed & self._home_zones:
+            self._state = STATE_ALARM_ARMED_HOME
 
         if self._alarm:
-            return STATE_ALARM_TRIGGERED
-
-        if self._armed:
-            return STATE_ALARM_ARMED_HOME
+            self._state = STATE_ALARM_TRIGGERED
 
         if self._exittime or self._exittime10:
-            return STATE_ALARM_ARMING
+            self._state = STATE_ALARM_ARMING
 
         if self._entrytime:
-            return STATE_ALARM_PENDING
+            self._state = STATE_ALARM_PENDING
 
         if not any(
             (
@@ -94,7 +110,7 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
                 self._entrytime,
             )
         ):
-            return STATE_ALARM_DISARMED
+            self._state = STATE_ALARM_DISARMED
 
         return self._state
 
@@ -105,12 +121,16 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         @callback
         def armed_message_received(msg):
             """Handler new MQTT message."""
-            payload = msg.payload
-            try:
-                self._armed = bool(int(payload))
-            except ValueError:
-                _LOGGER.error("Unable to parse armed message: %s", payload)
+            data = IndexIntData.from_msg(msg)
+            if data is None:
+                _LOGGER.error("Undable to parse MQTT message")
 
+            if data.value == 1:
+                self._armed.add(data.index)
+            else:
+                self._armed.discard(data.index)
+
+            _LOGGER.debug("Armed: %s", self._armed)
             self.async_write_ha_state()
 
         topics[CONF_ARMED_TOPIC] = {
@@ -122,12 +142,16 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         @callback
         def alarm_message_received(msg):
             """Handler new MQTT message."""
-            payload = msg.payload
-            try:
-                self._alarm = bool(int(payload))
-            except ValueError:
-                _LOGGER.error("Unable to parse alarm message: %s", payload)
+            data = IndexIntData.from_msg(msg)
+            if data is None:
+                _LOGGER.error("Undable to parse MQTT message")
 
+            if data.value == 1:
+                self._alarm.add(data.index)
+            else:
+                self._alarm.discard(data.index)
+
+            _LOGGER.debug("Alarm: %s", self._alarm)
             self.async_write_ha_state()
 
         topics[CONF_ALARM_TOPIC] = {
@@ -139,12 +163,16 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         @callback
         def entrytime_message_received(msg):
             """Handler new MQTT message."""
-            payload = msg.payload
-            try:
-                self._entrytime = bool(int(payload))
-            except ValueError:
-                _LOGGER.error("Unable to parse entrytime message: %s", payload)
+            data = IndexIntData.from_msg(msg)
+            if data is None:
+                _LOGGER.error("Undable to parse MQTT message")
 
+            if data.value == 1:
+                self._entrytime.add(data.index)
+            else:
+                self._entrytime.discard(data.index)
+
+            _LOGGER.debug("Entry Time: %s", self._entrytime)
             self.async_write_ha_state()
 
         topics[CONF_ENTRYTIME_TOPIC] = {
@@ -156,12 +184,16 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         @callback
         def exittime_message_received(msg):
             """Handler new MQTT message."""
-            payload = msg.payload
-            try:
-                self._exittime = bool(int(payload))
-            except ValueError:
-                _LOGGER.error("Unable to exittime alarm message: %s", payload)
+            data = IndexIntData.from_msg(msg)
+            if data is None:
+                _LOGGER.error("Undable to parse MQTT message")
 
+            if data.value == 1:
+                self._exittime.add(data.index)
+            else:
+                self._exittime.discard(data.index)
+
+            _LOGGER.debug("Arming <10s: %s", self._exittime)
             self.async_write_ha_state()
 
         topics[CONF_EXITTIME_TOPIC] = {
@@ -173,12 +205,16 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
         @callback
         def exittime10_message_received(msg):
             """Handler new MQTT message."""
-            payload = msg.payload
-            try:
-                self._exittime10 = bool(int(payload))
-            except ValueError:
-                _LOGGER.error("Unable to parse exittime10 message: %s", payload)
+            data = IndexIntData.from_msg(msg)
+            if data is None:
+                _LOGGER.error("Undable to parse MQTT message")
 
+            if data.value == 1:
+                self._exittime10.add(data.index)
+            else:
+                self._exittime10.discard(data.index)
+
+            _LOGGER.debug("Arming >10s: %s", self._exittime10)
             self.async_write_ha_state()
 
         topics[CONF_EXITTIME10_TOPIC] = {
@@ -200,33 +236,31 @@ class AmpioSatelAlarmControlPanel(AmpioEntity, alarm.AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        return (
-            alarm.SUPPORT_ALARM_ARM_HOME
-            | alarm.SUPPORT_ALARM_ARM_AWAY
-            | alarm.SUPPORT_ALARM_ARM_NIGHT
-        )
+        return self._supported_features
 
     async def async_alarm_disarm(self, code=None):
         """Send disarm command."""
-        cmd = f"1E0084{self._zone_mask.hex()}"
-        _LOGGER.info("Command disarm: %s", cmd)
+        clear_alarm = self._state == STATE_ALARM_TRIGGERED
+        cmd = f"1E0084{self._all_cmd_data}"
+        _LOGGER.debug("Command disarm: %s", cmd)
         async_publish(self.hass, self._config[CONF_RAW_TOPIC], cmd, 0, False)
 
-    async def async_alarm_arm_night(self, code=None):
-        """Send arm home command."""
-        cmd = f"1E0080{self._zone_mask.hex()}"
-        _LOGGER.debug("Command arm night: %s", cmd)
-        async_publish(self.hass, self._config[CONF_RAW_TOPIC], cmd, 0, False)
+        if clear_alarm:
+            # Wait 1s before clearing the alarm
+            await asyncio.sleep(1)
+            cmd = f"1E0085{self._all_cmd_data}"
+            _LOGGER.debug("Command clear: %s", cmd)
+            async_publish(self.hass, self._config[CONF_RAW_TOPIC], cmd, 0, False)
 
     async def async_alarm_arm_home(self, code=None):
         """Send arm home command."""
-        cmd = f"1E0080{self._zone_mask.hex()}"
+        cmd = f"1E0080{self._home_cmd_data}"
         _LOGGER.debug("Command arm home: %s", cmd)
         async_publish(self.hass, self._config[CONF_RAW_TOPIC], cmd, 0, False)
 
     async def async_alarm_arm_away(self, code=None):
         """Send arm away command."""
-        cmd = f"1E0080{self._zone_mask.hex()}"
+        cmd = f"1E0080{self._away_cmd_data}"
         _LOGGER.debug("Command arm home: %s", cmd)
         async_publish(self.hass, self._config[CONF_RAW_TOPIC], cmd, 0, False)
 

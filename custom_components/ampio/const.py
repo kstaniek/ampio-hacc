@@ -67,6 +67,8 @@ CONF_ALARM_TOPIC = "alarm_topic"
 CONF_ENTRYTIME_TOPIC = "entrytime_topic"
 CONF_EXITTIME10_TOPIC = "exittime10_topic"
 CONF_EXITTIME_TOPIC = "exittime_topic"
+CONF_AWAY_ZONES = "away_zones"
+CONF_HOME_ZONES = "home_zones"
 
 ATTR_VERSION = "version"
 ATTR_DISCOVERY_PAYLOAD = "discovery_payload"

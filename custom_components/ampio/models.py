@@ -5,7 +5,8 @@ import base64
 from collections import defaultdict
 import datetime as dt
 from enum import IntEnum
-from typing import Any, Callable, Dict, List, Union
+import logging
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import attr
 
@@ -22,6 +23,7 @@ from homeassistant.helpers import device_registry
 from .const import (
     CONF_ALARM_TOPIC,
     CONF_ARMED_TOPIC,
+    CONF_AWAY_ZONES,
     CONF_BRIGHTNESS_COMMAND_TOPIC,
     CONF_BRIGHTNESS_STATE_TOPIC,
     CONF_CLOSING_STATE_TOPIC,
@@ -29,6 +31,7 @@ from .const import (
     CONF_ENTRYTIME_TOPIC,
     CONF_EXITTIME10_TOPIC,
     CONF_EXITTIME_TOPIC,
+    CONF_HOME_ZONES,
     CONF_OPENING_STATE_TOPIC,
     CONF_RAW_TOPIC,
     CONF_RGB_COMMAND_TOPIC,
@@ -134,6 +137,8 @@ class ModuleCodes(IntEnum):
 
 DOMAIN = "ampio"
 
+_LOGGER = logging.getLogger(__name__)
+
 PublishPayloadType = Union[str, bytes, int, float, None]
 
 
@@ -150,6 +155,38 @@ class Message:
 
 
 MessageCallbackType = Callable[[Message], None]
+
+
+def extract_index_from_topic(topic: str) -> Optional[int]:
+    """Takes last part of topic as number."""
+    parts = topic.split("/")
+    try:
+        return int(parts[-1])
+    except ValueError:
+        return None
+
+
+@attr.s(slots=True, frozen=True)
+class IndexIntData:
+    """Represents the index from last part of topic with data."""
+
+    index = attr.ib(type=int)
+    value = attr.ib(type=int)
+
+    @classmethod
+    def from_msg(cls, msg: Message) -> Optional[IndexIntData]:
+        """Create from MQTT message."""
+        index = extract_index_from_topic(msg.topic)
+        if index is None:
+            _LOGGER.error("Unable to extract index from topic: %s", msg.topic)
+            return None
+
+        try:
+            value = int(msg.payload)
+        except ValueError:
+            _LOGGER.error("Unable to parse data message tp ind: %s", msg.payload)
+            return None
+        return cls(index, value)
 
 
 class ItemTypes(IntEnum):
@@ -188,6 +225,7 @@ class ItemName:
 
     name = attr.ib(type=str)
     device_class = attr.ib(type=str)
+    prefix = attr.ib(type=str)
 
     @name.default
     def extract_name(self):
@@ -204,6 +242,15 @@ class ItemName:
         if len(parts) > 1:
             prefix = parts[0]
             return DEVICE_CLASSES.get(prefix)
+        return None
+
+    @prefix.default
+    def extract_prefix(self):
+        """Extrct device type code from name."""
+        parts = self.d.split(":")
+        if len(parts) > 1:
+            return parts[0]
+        return None
 
     @classmethod
     def from_topic_payload(cls, payload: Dict) -> List[ItemName]:
@@ -281,7 +328,7 @@ class AmpioModuleInfo:
         }
 
     @classmethod
-    def from_topic_payload(cls, payload: dict) -> AmpioModuleInfo:
+    def from_topic_payload(cls, payload: dict) -> List[AmpioModuleInfo]:
         """Create a module object from topic payload."""
         devices = AMPIO_DEVICES_SCHEMA(payload)
         result = []
@@ -365,11 +412,10 @@ class MCONModuleInfo(AmpioModuleInfo):
                     self.configs["binary_sensor"].append(data.config)
                     self.unique_ids.add(data.unique_id)
 
-            for index, item in self.names.get(ItemTypes.AnalogOutput254, {}).items():
-                data = AmpioSatelConfig.from_ampio_device(self, item, index + 1)
-                if data:
-                    self.configs["alarm_control_panel"].append(data.config)
-                    self.unique_ids.add(data.unique_id)
+            data = AmpioSatelConfig.from_ampio_device(self)
+            if data:
+                self.configs["alarm_control_panel"].append(data.config)
+                self.unique_ids.add(data.unique_id)
 
 
 class MLED1ModuleInfo(AmpioModuleInfo):
@@ -565,7 +611,7 @@ class AmpioTempSensorConfig(AmpioConfig):
         mac = ampio_device.user_mac
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-t{index}",
-            CONF_NAME: f"{mac}-t{index}",
+            CONF_NAME: f"ampio-{mac}-t{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_UNIT_OF_MEASUREMENT: "°C",
             CONF_DEVICE_CLASS: "temperature",
@@ -589,7 +635,7 @@ class AmpioHumiditySensorConfig(AmpioConfig):
         name = f"Humidity {ampio_device.name}"
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-h{index}",
-            CONF_NAME: f"{mac}-h{index}",
+            CONF_NAME: f"ampio-{mac}-h{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_UNIT_OF_MEASUREMENT: "%",
             CONF_DEVICE_CLASS: "humidity",
@@ -613,7 +659,7 @@ class AmpioPressureSensorConfig(AmpioConfig):
         name = f"Pressure {ampio_device.name}"
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-ps{index}",
-            CONF_NAME: f"{mac}-ps{index}",
+            CONF_NAME: f"ampio-{mac}-ps{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_DEVICE_CLASS: "pressure",
             CONF_STATE_TOPIC: state_topic,
@@ -635,7 +681,7 @@ class AmpioNoiseSensorConfig(AmpioConfig):
         name = f"Noise {ampio_device.name}"
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-n{index}",
-            CONF_NAME: f"{mac}-n{index}",
+            CONF_NAME: f"ampio-{mac}-n{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_DEVICE_CLASS: "signal_strength",
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/au16l/3",
@@ -657,7 +703,7 @@ class AmpioIlluminanceSensorConfig(AmpioConfig):
         name = f"Illuminance {ampio_device.name}"
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-i{index}",
-            CONF_NAME: f"{mac}-i{index}",
+            CONF_NAME: f"ampio-{mac}-i{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_DEVICE_CLASS: "illuminance",
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/au16l/4",
@@ -679,7 +725,7 @@ class AmpioAirqualitySensorConfig(AmpioConfig):
         name = f"Air Quality {ampio_device.name}"
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-aq{index}",
-            CONF_NAME: f"{mac}-aq{index}",
+            CONF_NAME: f"ampio-{mac}-aq{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/au16l/5",
             CONF_UNIT_OF_MEASUREMENT: None,
@@ -698,7 +744,7 @@ class AmpioTouchSensorConfig(AmpioConfig):
 
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-i{index}",
-            CONF_NAME: f"{mac}-i{index}",
+            CONF_NAME: f"ampio-{mac}-i{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/i/{index}",
             CONF_DEVICE: ampio_device.as_hass_device(),
@@ -718,7 +764,7 @@ class AmpioBinarySensorExtendedConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-bi{index}",
-            CONF_NAME: f"{mac}-bi{index}",
+            CONF_NAME: f"ampio-{mac}-bi{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/bi/{index}",
             CONF_DEVICE: ampio_device.as_hass_device(),
@@ -740,7 +786,7 @@ class AmpioBinarySensorConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-i{index}",
-            CONF_NAME: f"{mac}-i{index}",
+            CONF_NAME: f"ampio-{mac}-i{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/i/{index}",
             CONF_DEVICE: ampio_device.as_hass_device(),
@@ -762,7 +808,7 @@ class AmpioDimmableLightConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-a{index}",
-            CONF_NAME: f"{mac}-a{index}",
+            CONF_NAME: f"ampio-{mac}-a{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/o/{index}",
             CONF_COMMAND_TOPIC: f"ampio/to/{mac}/o/{index}/cmd",
@@ -790,7 +836,7 @@ class AmpioLightConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-a{index}",
-            CONF_NAME: f"{mac}-a{index}",
+            CONF_NAME: f"ampio-{mac}-a{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/o/{index}",
             CONF_COMMAND_TOPIC: f"ampio/to/{mac}/o/{index}/cmd",
@@ -814,7 +860,7 @@ class AmpioRGBLightConfig(AmpioConfig):
         index = 1
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-rgbw{index}",
-            CONF_NAME: f"{mac}-rgbw{index}",
+            CONF_NAME: f"ampio-{mac}-rgbw{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_RGB_STATE_TOPIC: f"ampio/from/{mac}/state/rgbw/{index}",
             CONF_RGB_COMMAND_TOPIC: f"ampio/to/{mac}/rgbw/{index}/cmd",
@@ -836,7 +882,7 @@ class AmpioSwitchConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-bo{index}",
-            CONF_NAME: f"{mac}-bo{index}",
+            CONF_NAME: f"ampio-{mac}-bo{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/o/{index}",
             CONF_COMMAND_TOPIC: f"ampio/to/{mac}/o/{index}/cmd",
@@ -862,7 +908,7 @@ class AmpioFlagConfig(AmpioConfig):
         device_class = item.device_class
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-f{index}",
-            CONF_NAME: f"{mac}-f{index}",
+            CONF_NAME: f"ampio-{mac}-f{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/f/{index}",
             CONF_COMMAND_TOPIC: f"ampio/to/{mac}/f/{index}/cmd",
@@ -893,7 +939,7 @@ class AmpioCoverConfig(AmpioConfig):
 
         config = {
             CONF_UNIQUE_ID: f"ampio-{mac}-co{index}",
-            CONF_NAME: f"{mac}-co{index}",
+            CONF_NAME: f"ampio-{mac}-co{index}",
             CONF_FRIENDLY_NAME: item.name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/a/{index}",
             CONF_CLOSING_STATE_TOPIC: f"ampio/from/{mac}/state/o/{2*(index-1)+1}",
@@ -918,27 +964,38 @@ class AmpioCoverConfig(AmpioConfig):
 
 
 class AmpioSatelConfig(AmpioConfig):
-    """Ampio Satel Entity Configuration."""
+    """Ampio Satel single Entity configuration."""
 
     @classmethod
-    def from_ampio_device(cls, ampio_device: AmpioModuleInfo, item: ItemName, index=1):
-        """Create config from ampio device."""
+    def from_ampio_device(cls, ampio_device: AmpioModuleInfo):
+        """Create alarm config from ampio device."""
+        away = set()
+        home = set()
+        items: Dict[int, ItemName] = ampio_device.names.get(
+            ItemTypes.AnalogOutput254, {}
+        ).items()
         mac = ampio_device.user_mac
-        device_class = item.device_class
+        for index, item in items:
+            if item.prefix in ("A", "B", None):  # Away or Both or Not defined
+                away.add(index + 1)
+            if item.prefix in ("H", "B"):  # Home or Both
+                home.add(index + 1)
+
+        mac = ampio_device.user_mac
+        prefix = f"ampio/from/{mac}/state"
         config = {
-            CONF_UNIQUE_ID: f"ampio-{mac}-z{index}",
-            CONF_NAME: f"{mac}-z{index}",
-            CONF_FRIENDLY_NAME: item.name,
+            CONF_AWAY_ZONES: away,
+            CONF_HOME_ZONES: home,
+            CONF_UNIQUE_ID: f"ampio-{mac}-alarm",
+            CONF_NAME: f"ampio-{mac}-alarm",
+            CONF_FRIENDLY_NAME: ampio_device.name,
             CONF_RAW_TOPIC: f"ampio/to/{mac}/raw",
-            CONF_ARMED_TOPIC: f"ampio/from/{mac}/state/armed/{index}",
-            CONF_ALARM_TOPIC: f"ampio/from/{mac}/state/alarm/{index}",
-            CONF_ENTRYTIME_TOPIC: f"ampio/from/{mac}/state/entrytime/{index}",
-            CONF_EXITTIME10_TOPIC: f"ampio/from/{mac}/state/exittime10/{index}",
-            CONF_EXITTIME_TOPIC: f"ampio/from/{mac}/state/exittime/{index}",
+            CONF_ARMED_TOPIC: f"{prefix}/armed/+",
+            CONF_ALARM_TOPIC: f"{prefix}/alarm/+",
+            CONF_ENTRYTIME_TOPIC: f"{prefix}/entrytime/+",
+            CONF_EXITTIME10_TOPIC: f"{prefix}/exittime10/+",
+            CONF_EXITTIME_TOPIC: f"{prefix}/exittime/+",
             CONF_DEVICE: ampio_device.as_hass_device(),
         }
-
-        if device_class:
-            config[CONF_DEVICE_CLASS] = device_class
 
         return cls(config=config)
