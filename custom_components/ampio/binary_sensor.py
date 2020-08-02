@@ -5,6 +5,7 @@ import logging
 from homeassistant.components import binary_sensor
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 from . import discovery, subscription
@@ -24,7 +25,7 @@ DEFAULT_FORCE_UPDATE = False
 DEFAULT_NAME = "Ampio Binary Sensor"
 
 
-class AmpioBinarySensor(AmpioEntity, binary_sensor.BinarySensorEntity):
+class AmpioBinarySensor(AmpioEntity, RestoreEntity, binary_sensor.BinarySensorEntity):
     """Representation of Ampio Sensor."""
 
     def __init__(self, config):
@@ -56,6 +57,14 @@ class AmpioBinarySensor(AmpioEntity, binary_sensor.BinarySensorEntity):
                 }
             },
         )
+
+    async def async_added_to_hass(self):
+        """Entity added to the hass."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if not last_state:
+            return
+        self._state = last_state.state
 
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""

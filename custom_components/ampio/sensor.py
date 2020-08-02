@@ -8,6 +8,7 @@ from homeassistant.const import CONF_DEVICE_CLASS, CONF_ICON, CONF_UNIT_OF_MEASU
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 from . import discovery, subscription
@@ -28,7 +29,7 @@ DEFAULT_FORCE_UPDATE = False
 DEFAULT_NAME = "Ampio Sensor"
 
 
-class AmpioSensor(AmpioEntity, Entity):
+class AmpioSensor(AmpioEntity, RestoreEntity, Entity):
     """Representation of Ampio Sensor."""
 
     def __init__(self, config):
@@ -61,6 +62,14 @@ class AmpioSensor(AmpioEntity, Entity):
                 }
             },
         )
+
+    async def async_added_to_hass(self):
+        """Entity added to the hass."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if not last_state:
+            return
+        self._state = last_state.state
 
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""
