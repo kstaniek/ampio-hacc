@@ -237,7 +237,7 @@ class AmpioAPI:
         if not isinstance(topic, str):
             raise HomeAssistantError("Topic needs to be a string!")
 
-        subscription = Subscription(topic, msg_callback, qos, encoding)
+        subscription = Subscription(topic, lambda: True, msg_callback, qos, encoding)
         self.subscriptions.append(subscription)
 
         # Only subscribe if currently connected.
@@ -343,12 +343,12 @@ class AmpioAPI:
                         msg.payload,
                         msg.topic,
                         subscription.encoding,
-                        subscription.callback,
+                        subscription.job,
                     )
                     continue
 
             self.hass.async_run_job(
-                subscription.callback,
+                subscription.job,
                 Message(
                     msg.topic,
                     payload,

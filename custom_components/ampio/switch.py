@@ -17,7 +17,6 @@ from .const import (
     DEFAULT_QOS,
     SIGNAL_ADD_ENTITIES,
 )
-from .debug_info import log_messages
 from .entity import AmpioEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +33,6 @@ class AmpioSwitch(AmpioEntity, switch.SwitchEntity):
         """(Re)Subscribe to topics."""
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def state_message_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload

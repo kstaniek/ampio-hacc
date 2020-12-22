@@ -1,12 +1,14 @@
 """Ampio Sensors."""
 import functools
 import logging
+from homeassistant.util.dt import now
 
 from homeassistant.components import binary_sensor
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.const import STATE_ON
 
 from . import discovery, subscription
 from .const import (
@@ -38,11 +40,15 @@ class AmpioBinarySensor(AmpioEntity, RestoreEntity, binary_sensor.BinarySensorEn
         @callback
         def state_message_received(msg):
             """Handler new MQTT message."""
+            last_state = self._state
             payload = msg.payload
             try:
                 self._state = bool(int(payload))
             except ValueError:
                 self._state = None
+
+            if last_state != self._state:
+                self._changed_time = now()
 
             self.async_write_ha_state()
 
@@ -64,7 +70,7 @@ class AmpioBinarySensor(AmpioEntity, RestoreEntity, binary_sensor.BinarySensorEn
         last_state = await self.async_get_last_state()
         if not last_state:
             return
-        self._state = last_state.state
+        self._state = last_state.state == STATE_ON
 
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""
@@ -77,9 +83,19 @@ class AmpioBinarySensor(AmpioEntity, RestoreEntity, binary_sensor.BinarySensorEn
         """Return true if the binary sensor is on."""
         return self._state
 
-    @property
-    def available(self) -> bool:
-        return True
+    # @property
+    # def should_poll(self):
+    #     """Poll the sensor to get even data stream even if ther is no change."""
+    #     return True
+
+    # @property
+    # def force_update(self) -> bool:
+    #     """Return True if state updates should be forced.
+
+    #     If True, a state change will be triggered anytime the state property is
+    #     updated, not just when the value changes.
+    #     """
+    #     return True
 
 
 async def async_setup_entry(

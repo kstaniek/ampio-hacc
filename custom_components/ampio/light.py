@@ -32,7 +32,6 @@ from .const import (
     DEFAULT_QOS,
     SIGNAL_ADD_ENTITIES,
 )
-from .debug_info import log_messages
 from .entity import AmpioEntity
 
 PLATFORM_SCHEMA = {}
@@ -56,7 +55,6 @@ class AmpioLight(AmpioEntity, light.LightEntity):
         topics = {}
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def state_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload
@@ -71,7 +69,6 @@ class AmpioLight(AmpioEntity, light.LightEntity):
             }
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def brightness_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload
@@ -94,7 +91,6 @@ class AmpioLight(AmpioEntity, light.LightEntity):
             self._brightness = None
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def rgb_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload
@@ -121,7 +117,6 @@ class AmpioLight(AmpioEntity, light.LightEntity):
             self._hs = (0, 0)
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def white_value_received(msg):
             """Handle new MQTT messages for white value."""
             self._white_value = float(msg.payload)

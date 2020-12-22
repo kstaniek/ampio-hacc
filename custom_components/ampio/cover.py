@@ -5,6 +5,7 @@ import logging
 from homeassistant.components import cover
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 from . import discovery, subscription
@@ -21,13 +22,12 @@ from .const import (
     DEFAULT_QOS,
     SIGNAL_ADD_ENTITIES,
 )
-from .debug_info import log_messages
 from .entity import AmpioEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class AmpioCover(AmpioEntity, cover.CoverEntity):
+class AmpioCover(AmpioEntity, RestoreEntity, cover.CoverEntity):
     """Representation of Ampio Cover."""
 
     def __init__(self, config):
@@ -53,7 +53,6 @@ class AmpioCover(AmpioEntity, cover.CoverEntity):
         topics = {}
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def position_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload
@@ -72,7 +71,6 @@ class AmpioCover(AmpioEntity, cover.CoverEntity):
             }
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def tilt_received(msg):
             payload = msg.payload
             try:
@@ -90,7 +88,6 @@ class AmpioCover(AmpioEntity, cover.CoverEntity):
             }
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def closing_received(msg):
             payload = msg.payload
             try:
@@ -108,7 +105,6 @@ class AmpioCover(AmpioEntity, cover.CoverEntity):
             }
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def opening_received(msg):
             payload = msg.payload
             try:
@@ -128,6 +124,18 @@ class AmpioCover(AmpioEntity, cover.CoverEntity):
         self._sub_state = await subscription.async_subscribe_topics(
             self.hass, self._sub_state, topics
         )
+
+    async def async_added_to_hass(self):
+        """Entity added to the hass."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._state = last_state.state
+            if cover.ATTR_CURRENT_POSITION in last_state.attributes:
+                self._cover_position = last_state.attributes[cover.ATTR_CURRENT_POSITION]
+            if cover.ATTR_CURRENT_TILT_POSITION in last_state.attributes:
+                self._tilt_position = last_state.attributes[cover.ATTR_CURRENT_TILT_POSITION]
+
 
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""

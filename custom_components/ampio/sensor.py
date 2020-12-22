@@ -1,6 +1,7 @@
 """Ampio Sensors."""
 import functools
 import logging
+from datetime import timedelta
 from typing import Optional
 
 from homeassistant.components import sensor
@@ -19,7 +20,6 @@ from .const import (
     DEFAULT_QOS,
     SIGNAL_ADD_ENTITIES,
 )
-from .debug_info import log_messages
 from .entity import AmpioEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 CONF_EXPIRE_AFTER = "expire_after"
 DEFAULT_FORCE_UPDATE = False
 DEFAULT_NAME = "Ampio Sensor"
+SCAN_INTERVAL = timedelta(seconds=15)
 
 
 class AmpioSensor(AmpioEntity, RestoreEntity, Entity):
@@ -40,7 +41,6 @@ class AmpioSensor(AmpioEntity, RestoreEntity, Entity):
         """(Re)Subscribe to topics."""
 
         @callback
-        @log_messages(self.hass, self.entity_id)
         def state_message_received(msg):
             """Handler new MQTT message."""
             payload = msg.payload
@@ -71,6 +71,7 @@ class AmpioSensor(AmpioEntity, RestoreEntity, Entity):
             return
         self._state = last_state.state
 
+
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""
         self._sub_state = await subscription.async_unsubscribe_topics(
@@ -96,6 +97,20 @@ class AmpioSensor(AmpioEntity, RestoreEntity, Entity):
     def device_class(self) -> Optional[str]:
         """Return the device class of the sensor."""
         return self._config.get(CONF_DEVICE_CLASS)
+
+    @property
+    def should_poll(self):
+        """Poll the sensor to get even data stream even if ther is no change."""
+        return True
+
+    @property
+    def force_update(self) -> bool:
+        """Return True if state updates should be forced.
+
+        If True, a state change will be triggered anytime the state property is
+        updated, not just when the value changes.
+        """
+        return True
 
 
 async def async_setup_entry(

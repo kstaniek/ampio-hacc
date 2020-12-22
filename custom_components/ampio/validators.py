@@ -9,10 +9,10 @@ ATTR_TYPE = "typ"
 ATTR_PCB = "pcb"
 ATTR_SOFTWARE = "soft_ver"
 ATTR_PROTOCOL = "protocol"
-ATTR_BI = "bi"
-ATTR_BO = "bo"
-ATTR_AI = "ai"
-ATTR_AO = "ao"
+ATTR_I = "i"
+ATTR_O = "o"
+ATTR_A = "a"
+ATTR_AU = "au"
 ATTR_FLAG = "f"
 ATTR_NAME = "name"
 ATTR_DEVICES = "devices"
@@ -52,10 +52,11 @@ AMPIO_DEVICE_SCHEMA = vol.Schema(
         vol.Required(ATTR_SOFTWARE): vol.Coerce(int),
         vol.Required(ATTR_PROTOCOL): vol.Coerce(int),
         vol.Required(ATTR_DATE_PROD): vol.Coerce(int),
-        vol.Required(ATTR_BI): vol.Coerce(int),
-        vol.Required(ATTR_BO): vol.Coerce(int),
-        vol.Required(ATTR_AI): vol.Coerce(int),
-        vol.Required(ATTR_AO): vol.Coerce(int),
+        vol.Required(ATTR_I): vol.Coerce(int),
+        vol.Required(ATTR_O): vol.Coerce(int),
+        vol.Required(ATTR_A): vol.Coerce(int),
+        vol.Required(ATTR_AU): vol.Coerce(int),
+        vol.Required(ATTR_T): vol.Coerce(int),
         vol.Required(ATTR_FLAG): vol.Coerce(int),
         vol.Required(ATTR_NAME): string,
     }
@@ -63,7 +64,8 @@ AMPIO_DEVICE_SCHEMA = vol.Schema(
 
 AMPIO_DEVICES_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICES): vol.All(
+        vol.Required(ATTR_S): vol.Coerce(int),
+        vol.Optional(ATTR_D, default=[]): vol.All(
             ensure_list,
             # pylint: disable=unnecessary-lambda
             [lambda value: AMPIO_DEVICE_SCHEMA(value)],
@@ -73,7 +75,7 @@ AMPIO_DEVICES_SCHEMA = vol.Schema(
 
 AMPIO_DESCRIPTION_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_T): vol.Coerce(int),
+        vol.Required(ATTR_T): string,
         vol.Required(ATTR_N): vol.Coerce(int),
         vol.Required(ATTR_D): string,
     }

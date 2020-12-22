@@ -14,6 +14,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util.dt import now
+
 
 from .const import CONF_STATE_TOPIC, CONF_UNIQUE_ID
 
@@ -30,6 +32,8 @@ class AmpioEntity(Entity):
         self._unique_id = config.get(CONF_UNIQUE_ID)
         self._state = None
         self._sub_state = None
+        self._available = False
+        self._changed_time = now()
 
     @property
     def should_poll(self):
@@ -45,6 +49,10 @@ class AmpioEntity(Entity):
     def unique_id(self):
         """Return a unique ID."""
         return self._unique_id
+
+    @property
+    def available(self) -> bool:
+        return self._available
 
     @property
     def device_class(self) -> Optional[str]:
@@ -65,6 +73,15 @@ class AmpioEntity(Entity):
         """Call to subscribe topics for entity."""
         return
 
+    @property
+    def state_attributes(self) -> Optional[Dict[str, Any]]:
+        """Return the state attributes.
+
+        Implemented by component base class. Convention for attribute names
+        is lowercase snake_case.
+        """
+        return {"changed_time": self._changed_time}
+
     async def async_added_to_hass(self):
         """Action for initial topics subscription."""
         await super().async_added_to_hass()
@@ -76,6 +93,7 @@ class AmpioEntity(Entity):
             entity_registry.async_update_entity(
                 self.entity_id, name=self._config[CONF_FRIENDLY_NAME]
             )
+        self._available = True
 
     @property
     def device_state_attributes(self) -> Optional[Dict[str, Any]]:
@@ -87,7 +105,7 @@ class AmpioEntity(Entity):
         if state_topic:
             parts = state_topic.split("/")
             if len(parts) > 1:
-                return {"value": parts[-2], "index": parts[-1]}
+                return {"Ampio": f"{parts[-4].lower()}/{parts[-2]}/{parts[-1]}"}
         return None
 
 
@@ -102,43 +120,12 @@ class AmpioEntityDeviceInfo(Entity):
     async def discovery_update(self, device_config):
         """Handle updated discovery message."""
         self._device_config = device_config
-        # device_info = module.as_hass_device()
-        # await self._device_info_discovery_update(device_info)
         self.async_write_ha_state()
-
-    # async def _device_info_discovery_update(self, config: dict):
-    #     """Handle updated discovery message."""
-    #     _LOGGER.debug("Device info discovery update: %s", config)
-    #     self._device_config = config
-    #     device_registry = await self.hass.helpers.device_registry.async_get_registry()
-    #     config_entry_id = self._config_entry.entry_id
-    #     device_info = self.device_info
-
-    #     if config_entry_id is not None and device_info is not None:
-    #         device_info["config_entry_id"] = config_entry_id
-    #         device_registry.async_get_or_create(**device_info)
 
     @property
     def device_info(self):
         """Return a device description for device registry."""
         return self._device_config
-
-    # @property
-    # def capability_attributes(self):
-    #     """Return the capability attributes.
-
-    #     Attributes that explain the capabilities of an entity.
-    #     Implemented by component base class. Convention for attribute names
-    #     is lowercase snake_case.
-    #     """
-    #     if self.registry_entry:
-    #         device_id = self.registry_entry.device_id
-    #     return {
-    #         "model": self.device_info.model,
-    #         "manufacturer": self.device_info.manufacturer,
-    #         "module": self.device_info.name,
-    #         "sw_version": self.device_info.sw_version,
-    #     }
 
 
 class AmpioModuleDiscoveryUpdate(Entity):

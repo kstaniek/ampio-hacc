@@ -189,7 +189,7 @@ async def async_add_entities(
         return
 
     to_add = [klass(config) for config in entities]
-    _async_add_entities(to_add, update_before_add=False)
+    _async_add_entities(to_add, update_before_add=True)
     entities.clear()
 
 

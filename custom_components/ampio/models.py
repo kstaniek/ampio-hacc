@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 from collections import defaultdict
 import datetime as dt
-from enum import IntEnum
+from enum import Enum, IntEnum
 import logging
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -46,13 +46,12 @@ from .const import (
 from .validators import (
     AMPIO_DESCRIPTIONS_SCHEMA,
     AMPIO_DEVICES_SCHEMA,
-    ATTR_AI,
-    ATTR_AO,
-    ATTR_BI,
-    ATTR_BO,
+    ATTR_A,
+    ATTR_AU,
+    ATTR_I,
+    ATTR_O,
     ATTR_D,
     ATTR_DATE_PROD,
-    ATTR_DEVICES,
     ATTR_FLAG,
     ATTR_MAC,
     ATTR_N,
@@ -189,19 +188,26 @@ class IndexIntData:
         return cls(index, value)
 
 
-class ItemTypes(IntEnum):
+class ItemTypes(str, Enum):
     """Item type codes."""
 
-    OW = 3
-    BinaryFlag = 6
-    BinaryInput254 = 10
-    BinaryInput509 = 11
-    BinaryOutput254 = 12
-    BinaryOutput509 = 13
-    AnalogInput254 = 14
-    AnalogInput509 = 15
-    AnalogOutput254 = 16
-    AnalogOutput509 = 17
+    # OW = "t"
+    # # BinaryFlag = "f"
+    # BinaryInput254 = "i"
+    # BinaryInput509 = "i"
+    # BinaryOutput254 = "o"
+    # BinaryOutput509 = "o"
+    # AnalogInput254 = "a"
+    # AnalogInput509 = "a"
+    # AnalogOutput254 = "au"
+    # AnalogOutput509 = "au"
+    Temperature = "t"
+    BinaryFlag = "f"
+    BinaryInput = "i"
+    BinaryOutput = "o"
+    AnalogInput = "a"
+    AnalogOutput = "au"
+
 
 
 def base64decode(value: str):
@@ -278,10 +284,11 @@ class AmpioModuleInfo:
     software = attr.ib(type=int)
     protocol = attr.ib(type=int)
     date_prod = attr.ib(type=str)
-    bi = attr.ib(type=int)  # pylint: disable=invalid-name
-    bo = attr.ib(type=int)  # pylint: disable=invalid-name
-    ai = attr.ib(type=int)  # pylint: disable=invalid-name
-    ao = attr.ib(type=int)  # pylint: disable=invalid-name
+    i = attr.ib(type=int)  # pylint: disable=invalid-name
+    o = attr.ib(type=int)  # pylint: disable=invalid-name
+    a = attr.ib(type=int)  # pylint: disable=invalid-name
+    au = attr.ib(type=int)  # pylint: disable=invalid-name
+    t = attr.ib(type=int)  # pylint: disable=invalid-name
     flags = attr.ib(type=int)
     name = attr.ib(type=str, converter=base64decode)
 
@@ -299,7 +306,7 @@ class AmpioModuleInfo:
                 self.configs["switch"].append(data.config)
                 self.unique_ids.add(data.unique_id)
 
-        for index, item in self.names.get(ItemTypes.OW, {}).items():
+        for index, item in self.names.get(ItemTypes.Temperature, {}).items():
             data = AmpioTempSensorConfig.from_ampio_device(self, item, index + 1)
             if data:
                 self.configs["sensor"].append(data.config)
@@ -332,7 +339,7 @@ class AmpioModuleInfo:
         """Create a module object from topic payload."""
         devices = AMPIO_DEVICES_SCHEMA(payload)
         result = []
-        for device in devices[ATTR_DEVICES]:
+        for device in devices[ATTR_D]:
             klass = CLASS_FACTORY.get(device[ATTR_TYPE], AmpioModuleInfo)
             result.append(
                 klass(
@@ -343,10 +350,11 @@ class AmpioModuleInfo:
                     device[ATTR_SOFTWARE],
                     device[ATTR_PROTOCOL],
                     device[ATTR_DATE_PROD],
-                    device[ATTR_BI],
-                    device[ATTR_BO],
-                    device[ATTR_AI],
-                    device[ATTR_AO],
+                    device[ATTR_I],
+                    device[ATTR_O],
+                    device[ATTR_A],
+                    device[ATTR_AU],
+                    device[ATTR_T],
                     device[ATTR_FLAG],
                     device[ATTR_NAME],
                 )
@@ -396,21 +404,21 @@ class MCONModuleInfo(AmpioModuleInfo):
         """Update config."""
         super().update_configs()
         if self.software % 100 == 1:  # INTEGRA
-            for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
+            for index, item in self.names.get(ItemTypes.BinaryInput, {}).items():
                 data = AmpioBinarySensorExtendedConfig.from_ampio_device(
-                    self, item, index + 1
+                    self, item, index
                 )
                 if data:
                     self.configs["binary_sensor"].append(data.config)
                     self.unique_ids.add(data.unique_id)
 
-            for index, item in self.names.get(ItemTypes.BinaryInput509, {}).items():
-                data = AmpioBinarySensorExtendedConfig.from_ampio_device(
-                    self, item, index + 255
-                )
-                if data:
-                    self.configs["binary_sensor"].append(data.config)
-                    self.unique_ids.add(data.unique_id)
+            # for index, item in self.names.get(ItemTypes.BinaryInput509, {}).items():
+            #     data = AmpioBinarySensorExtendedConfig.from_ampio_device(
+            #         self, item, index + 255
+            #     )
+            #     if data:
+            #         self.configs["binary_sensor"].append(data.config)
+            #         self.unique_ids.add(data.unique_id)
 
             data = AmpioSatelConfig.from_ampio_device(self)
             if data:
@@ -420,11 +428,11 @@ class MCONModuleInfo(AmpioModuleInfo):
 
 class MLED1ModuleInfo(AmpioModuleInfo):
     """MLED-1 Ampio module information."""
-
     def update_configs(self) -> None:
         super().update_configs()
-        for index, item in self.names.get(ItemTypes.AnalogOutput254, {}).items():
-            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
+        _LOGGER.debug("MLED1: %s", self.names)
+        for index, item in self.names.get(ItemTypes.AnalogOutput.value, {}).items():
+            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["light"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -435,8 +443,10 @@ class MDIM8sModuleInfo(AmpioModuleInfo):
 
     def update_configs(self) -> None:
         super().update_configs()
-        for index, item in self.names.get(ItemTypes.BinaryOutput254, {}).items():
-            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
+        _LOGGER.debug("MDIM8s: %s", self.names)
+
+        for index, item in self.names.get(ItemTypes.BinaryOutput, {}).items():
+            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["light"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -447,8 +457,9 @@ class MOC4ModuleInfo(AmpioModuleInfo):
 
     def update_configs(self) -> None:
         super().update_configs()
-        for index, item in self.names.get(ItemTypes.BinaryOutput254, {}).items():
-            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index + 1)
+        _LOGGER.debug("MDIM8s: %s", self.names)
+        for index, item in self.names.get(ItemTypes.BinaryOutput, {}).items():
+            data = AmpioDimmableLightConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["light"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -459,18 +470,18 @@ class MPR8sModuleInfo(AmpioModuleInfo):
 
     def update_configs(self) -> None:
         super().update_configs()
-        for index, item in self.names.get(ItemTypes.BinaryOutput254, {}).items():
+        for index, item in self.names.get(ItemTypes.BinaryOutput, {}).items():
             if item.device_class == "light":
-                data = AmpioLightConfig.from_ampio_device(self, item, index + 1)
+                data = AmpioLightConfig.from_ampio_device(self, item, index)
                 self.configs["light"].append(data.config)
                 self.unique_ids.add(data.unique_id)
             else:
-                data = AmpioSwitchConfig.from_ampio_device(self, item, index + 1)
+                data = AmpioSwitchConfig.from_ampio_device(self, item, index)
                 self.configs["switch"].append(data.config)
                 self.unique_ids.add(data.unique_id)
 
-        for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
-            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
+        for index, item in self.names.get(ItemTypes.BinaryInput, {}).items():
+            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["binary_sensor"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -484,13 +495,13 @@ class MDOTModuleInfo(AmpioModuleInfo):
     def update_configs(self) -> None:
         """Generat module configuration."""
         super().update_configs()
-        for index in range(
-            self._BUTTONS
+        for index in range(1,
+            self._BUTTONS + 1
         ):  # regardles of names module has always fixed physical touch buttons
-            item = self.names.get(ItemTypes.BinaryInput254, {}).get(index)
+            item = self.names.get(ItemTypes.BinaryInput, {}).get(index)
             if item is None:
-                item = ItemName(base64encode(f"{self.name} Touch"))
-            data = AmpioTouchSensorConfig.from_ampio_device(self, item, index + 1)
+                item = ItemName(base64encode(f"{self.name} Button {index}"))
+            data = AmpioTouchSensorConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["binary_sensor"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -537,14 +548,14 @@ class MSERV3sModuleInfo(AmpioModuleInfo):
 
     def update_configs(self) -> None:
         super().update_configs()
-        for index, item in self.names.get(ItemTypes.BinaryOutput254, {}).items():
-            data = AmpioSwitchConfig.from_ampio_device(self, item, index + 1)
+        for index, item in self.names.get(ItemTypes.BinaryOutput, {}).items():
+            data = AmpioSwitchConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["switch"].append(data.config)
                 self.unique_ids.add(data.unique_id)
 
-        for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
-            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
+        for index, item in self.names.get(ItemTypes.BinaryInput, {}).items():
+            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["binary_sensor"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -556,14 +567,14 @@ class MROL4sModuleInfo(AmpioModuleInfo):
     def update_configs(self) -> None:
         super().update_configs()
 
-        for index, item in self.names.get(ItemTypes.BinaryOutput254, {}).items():
-            data = AmpioCoverConfig.from_ampio_device(self, item, index + 1)
+        for index, item in self.names.get(ItemTypes.BinaryOutput, {}).items():
+            data = AmpioCoverConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["cover"].append(data.config)
                 self.unique_ids.add(data.unique_id)
 
-        for index, item in self.names.get(ItemTypes.BinaryInput254, {}).items():
-            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index + 1)
+        for index, item in self.names.get(ItemTypes.BinaryInput, {}).items():
+            data = AmpioBinarySensorConfig.from_ampio_device(self, item, index)
             if data:
                 self.configs["binary_sensor"].append(data.config)
                 self.unique_ids.add(data.unique_id)
@@ -728,7 +739,7 @@ class AmpioAirqualitySensorConfig(AmpioConfig):
             CONF_NAME: f"ampio-{mac}-aq{index}",
             CONF_FRIENDLY_NAME: name,
             CONF_STATE_TOPIC: f"ampio/from/{mac}/state/au16l/5",
-            CONF_UNIT_OF_MEASUREMENT: None,
+            CONF_UNIT_OF_MEASUREMENT: "AQI",
             CONF_DEVICE: ampio_device.as_hass_device(),
         }
         return cls(config=config)
@@ -972,14 +983,14 @@ class AmpioSatelConfig(AmpioConfig):
         away = set()
         home = set()
         items: Dict[int, ItemName] = ampio_device.names.get(
-            ItemTypes.AnalogOutput254, {}
+            ItemTypes.AnalogOutput, {}
         ).items()
         mac = ampio_device.user_mac
         for index, item in items:
             if item.prefix in ("A", "B", None):  # Away or Both or Not defined
-                away.add(index + 1)
+                away.add(index)
             if item.prefix in ("H", "B"):  # Home or Both
-                home.add(index + 1)
+                home.add(index)
 
         mac = ampio_device.user_mac
         prefix = f"ampio/from/{mac}/state"
