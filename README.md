@@ -54,8 +54,8 @@ Once you finish the configuration you should see the Ampio integration on the li
 
 ![config](https://github.com/kstaniek/ampio-hacc/blob/master/static/config3.png)
 
-The configuratio is done.
+The configuration is done.
 
 ## Thanks to
 
-Okek from Ampio for help, patience and effort to build the stable MQTT Broker for Ampio Smart Home System.  
+Olek from Ampio for help, patience and effort to build the stable MQTT Broker for Ampio Smart Home System.
