@@ -76,6 +76,7 @@ class AmpioCover(AmpioEntity, RestoreEntity, cover.CoverEntity):
             try:
                 self._tilt_position = int(payload)
             except ValueError:
+                raise
                 return
 
             self.async_write_ha_state()
@@ -120,10 +121,10 @@ class AmpioCover(AmpioEntity, RestoreEntity, cover.CoverEntity):
                 "msg_callback": opening_received,
                 "qos": DEFAULT_QOS,
             }
-
         self._sub_state = await subscription.async_subscribe_topics(
             self.hass, self._sub_state, topics
         )
+
 
     async def async_added_to_hass(self):
         """Entity added to the hass."""

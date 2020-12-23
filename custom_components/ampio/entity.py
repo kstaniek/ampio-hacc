@@ -14,7 +14,6 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.util.dt import now
 
 
 from .const import CONF_STATE_TOPIC, CONF_UNIQUE_ID
@@ -33,7 +32,6 @@ class AmpioEntity(Entity):
         self._state = None
         self._sub_state = None
         self._available = False
-        self._changed_time = now()
 
     @property
     def should_poll(self):
@@ -72,15 +70,6 @@ class AmpioEntity(Entity):
     async def subscribe_topics(self):
         """Call to subscribe topics for entity."""
         return
-
-    @property
-    def state_attributes(self) -> Optional[Dict[str, Any]]:
-        """Return the state attributes.
-
-        Implemented by component base class. Convention for attribute names
-        is lowercase snake_case.
-        """
-        return {"changed_time": self._changed_time}
 
     async def async_added_to_hass(self):
         """Action for initial topics subscription."""

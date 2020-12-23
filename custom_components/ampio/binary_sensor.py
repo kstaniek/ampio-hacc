@@ -40,15 +40,11 @@ class AmpioBinarySensor(AmpioEntity, RestoreEntity, binary_sensor.BinarySensorEn
         @callback
         def state_message_received(msg):
             """Handler new MQTT message."""
-            last_state = self._state
             payload = msg.payload
             try:
                 self._state = bool(int(payload))
             except ValueError:
                 self._state = None
-
-            if last_state != self._state:
-                self._changed_time = now()
 
             self.async_write_ha_state()
 
