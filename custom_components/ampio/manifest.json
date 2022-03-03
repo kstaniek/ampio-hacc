@@ -1,10 +1,12 @@
 {
-    "domain": "ampio",
-    "name": "Ampio System",
-    "config_flow": true,
-    "documentation": "https://www.example.com",
-    "dependencies": [],
-    "codeowners": [],
-    "zeroconf": ["_ampio-mqtt._tcp.local."],
-    "requirements": ["paho-mqtt==1.5.0"]
-  }
+  "domain": "ampio",
+  "name": "Ampio System",
+  "config_flow": true,
+  "documentation": "https://www.example.com",
+  "dependencies": ["mqtt"],
+  "codeowners": [],
+  "zeroconf": ["_ampio-mqtt._tcp.local."],
+  "requirements": ["paho-mqtt==1.5.0"],
+  "version": "0.0.3",
+  "iot_class": "local_push"
+}

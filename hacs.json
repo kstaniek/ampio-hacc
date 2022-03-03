@@ -1,16 +1,15 @@
 {
-    "name": "Ampio Systems",
-    "content_in_root": false,
-    "domains": [
-      "switch",
-      "alarm_control_panel",
-      "sensor",
-      "binary_sensor",
-      "light",
-      "sensor",
-      "cover"
-    ],
-    "iot_class": "local_push",
-    "zip_release": false,
-    "homeassistant": "0.112.0"
-  }
+  "name": "Ampio Systems",
+  "content_in_root": false,
+  "domains": [
+    "switch",
+    "alarm_control_panel",
+    "sensor",
+    "binary_sensor",
+    "light",
+    "sensor",
+    "cover"
+  ],
+  "zip_release": false,
+  "homeassistant": "0.112.0"
+}
